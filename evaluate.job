@@ -1,0 +1,21 @@
+#!/bin/bash
+
+#SBATCH --job-name=train_agent        # Job name
+#SBATCH --output=job.%j.out      # Name of output file (%j expands to jobId)
+#SBATCH --cpus-per-task=8       # Schedule one core
+#SBATCH --time=24:00:00          # Run time (hh:mm:ss) - run for one hour max
+#SBATCH --partition=brown ,red   # Run on either the Red or Brown queue
+
+source venv/bin/activate
+pip3 install -r requirements.txt
+export PYTHONPATH=.
+export LC_CTYPE=en_US.UTF-8
+
+simulator/linux.x86_64 &
+sleep 5
+
+if [ -n "$RANDOM_SEED" ]; then
+  python3 evaluate.py --job_id $SLURM_JOBID --seed $RANDOM_SEED $START_LEVEL $END_LEVEL
+else
+  python3 evaluate.py --job_id $SLURM_JOBID $START_LEVEL $END_LEVEL
+fi
