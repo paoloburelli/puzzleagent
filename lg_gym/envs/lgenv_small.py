@@ -23,14 +23,18 @@ class LGEnvSmall(gym.Env):
     def get_seed(self):
         return np.random.randint(100000) if self._seed is None else self._seed
 
-    def __init__(self, host, level_id, seed=None, log_file=None, extra_moves=0):
+    def __init__(self, level_id, host="localhost", port=8080, seed=None, log_file=None, extra_moves=0,
+                 docker_control=False):
         super().__init__()
+
+        if docker_control:
+            self.docker_container = Simulator.start_container(port)
 
         self.log_file = log_file
         self._seed = seed
         self.extra_moves = extra_moves
 
-        self.simulator = Simulator(host)
+        self.simulator = Simulator(host, port)
         self.level_id = level_id
 
         self.game = self.simulator.session_create(self.level_id, self.get_seed())
@@ -165,6 +169,9 @@ class LGEnvSmall(gym.Env):
             self.simulator.session_destroy(self.game['sessionId'])
         except Exception as e:
             logging.error(f"close: {e}")
+
+        if self.docker_container is not None:
+            Simulator.stop_container(self.docker_container)
 
     def render(self, mode='human', close=False):
         pass

@@ -45,9 +45,7 @@ if __name__ == "__main__":
 
     playtraces_filename = f"logs/rollouts/level_{args.level_id}_{args.seed}_{environment}_{timestamp}_{args.job_id}.pkl"
 
-    env = make_vec_env(environment,
-                       env_kwargs={'host': "http://localhost:8080", 'level_id': args.level_id, 'seed': args.seed,
-                                   'extra_moves': 3},
+    env = make_vec_env(environment, env_kwargs={'level_id': args.level_id, 'seed': args.seed, 'extra_moves': 3},
                        n_envs=5)
 
     episodes_to_run = int(episodes / best_fraction)

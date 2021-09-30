@@ -1,10 +1,24 @@
 import requests
 import json
+from docker import from_env
+import time
 
 
 class Simulator(object):
-    def __init__(self, host: str, **kwargs):
-        self.host = host
+
+    @staticmethod
+    def start_container(port):
+        docker_client = from_env()
+        container = docker_client.containers.run("lg-simulator", detach=True, ports={8080: port})
+        time.sleep(5)
+        return container
+
+    @staticmethod
+    def stop_container(container):
+        container.remove(force=True)
+
+    def __init__(self, host: str, port: int, **kwargs):
+        self.url = f"http://{host}:{port}"
 
     def load(self, level_index: int, seed: int) -> object:
         return self._do_request('/load', {
@@ -60,8 +74,8 @@ class Simulator(object):
     def sessions_clear(self) -> object:
         return self._do_request('/sessions/clear', {})
 
-    def _do_request(self, url: str, json_payload: object) -> object:
+    def _do_request(self, path: str, json_payload: object) -> object:
         headers = {"content-type": "application/json"}
-        response = requests.post(self.host + url, data=json.dumps(json_payload), headers=headers, timeout=100)
+        response = requests.post(self.url + path, data=json.dumps(json_payload), headers=headers, timeout=100)
         response.raise_for_status()
         return response.json()

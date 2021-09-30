@@ -3,6 +3,7 @@ import lg_gym
 from policies import Policies
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.vec_env import DummyVecEnv
 from datetime import datetime
 import argparse
 
@@ -24,9 +25,19 @@ if __name__ == "__main__":
         play_log_filename = f"logs/eval/gaussian_random_{timestamp}_{args.job_id}_{start_level}-{end_level - 1}.csv"
 
         env = make_vec_env('lgenv_small-v0',
-                           env_kwargs={'host': "http://localhost:8080", 'level_id': level_id, 'seed': args.seed,
+                           env_kwargs={'level_id': level_id, 'seed': args.seed,
                                        'log_file': play_log_filename},
                            n_envs=5)
+
+        # env = DummyVecEnv([lambda: gym.make('lgenv_small-v0', level_id=level_id, seed=args.seed,
+        #                                     log_file=play_log_filename, port=8080, docker_control=True),
+        #                    lambda: gym.make('lgenv_small-v0', level_id=level_id, seed=args.seed,
+        #                                     log_file=play_log_filename, port=8081, docker_control=True),
+        #                    lambda: gym.make('lgenv_small-v0', level_id=level_id, seed=args.seed,
+        #                                     log_file=play_log_filename, port=8082, docker_control=True),
+        #                    lambda: gym.make('lgenv_small-v0', level_id=level_id, seed=args.seed,
+        #                                     log_file=play_log_filename, port=8083, docker_control=True)
+        #                    ])
 
         # policy = Policies.trained_ppo("PPO_61_54740_20210928145611_1", env)
         # policy = Policies.uniform_random(env)

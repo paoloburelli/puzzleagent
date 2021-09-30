@@ -6,3 +6,4 @@ requests==2.26.0
 tensorboard==2.5.0
 imitation==0.2.0
 cloudpickle==1.6
+docker==5.0.2

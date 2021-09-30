@@ -18,13 +18,12 @@ if __name__ == "__main__":
 
     env_n = 5
     environment = 'lgenv_small-v0'
-    host_name = "http://localhost:8080"
 
     env = SubprocVecEnv([lambda: Monitor(
-        gym.make(environment, host=host_name, level_id=args.level_id, seed=args.seed,
+        gym.make(environment, level_id=args.level_id, seed=args.seed,
                  extra_moves=5)) for i in range(env_n)])
 
-    eval_env = Monitor(gym.make(environment, host=host_name, level_id=args.level_id, seed=args.seed))
+    eval_env = Monitor(gym.make(environment, level_id=args.level_id, seed=args.seed))
 
     model = PPO(policy="MlpPolicy", env=env, verbose=1, tensorboard_log="logs/train/", n_steps=2000)
 
