@@ -27,8 +27,7 @@ class LGEnvSmall(gym.Env):
                  docker_control=False):
         super().__init__()
 
-        if docker_control:
-            self.docker_container = Simulator.start_container(port)
+        self.docker_container = Simulator.start_container(port) if docker_control else None
 
         self.log_file = log_file
         self._seed = seed
