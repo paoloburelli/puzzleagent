@@ -9,12 +9,13 @@ class Policies:
         def __init__(self, env):
             self.sample_size = 2000000
 
-            en = env.envs[0]
+            width = env.get_attr("width")[0]
+            height = env.get_attr("height")[0]
 
-            X = truncnorm(a=-2, b=2, scale=en.width // 4).rvs(size=self.sample_size) + en.width // 2
+            X = truncnorm(a=-2, b=2, scale=width // 4).rvs(size=self.sample_size) + width // 2
             self.distribution_x = X.round().astype(int).tolist()
 
-            Y = truncnorm(a=-2, b=2, scale=en.height // 4).rvs(size=self.sample_size) + en.height // 2
+            Y = truncnorm(a=-2, b=2, scale=height // 4).rvs(size=self.sample_size) + height // 2
             self.distribution_y = Y.round().astype(int).tolist()
 
             self.env = env
@@ -26,7 +27,7 @@ class Policies:
             return [x, y]
 
         def predict(self, *args, **kwargs):
-            actions = [self.__action() for env in self.env.envs]
+            actions = [self.__action() for n in range(self.env.num_envs)]
             return actions, None
 
         @staticmethod
@@ -38,7 +39,7 @@ class Policies:
             self.env = env
 
         def predict(self, *args, **kwargs):
-            actions = [env.action_space.sample() for env in self.env.envs]
+            actions = [ap.sample() for ap in self.env.get_attr("action_space")]
             return actions, None
 
         @staticmethod
