@@ -16,12 +16,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
 
-    env_n = 5
+    env_n = 4
     environment = 'lgenv_small-v0'
 
-    env = SubprocVecEnv([lambda: Monitor(
-        gym.make(environment, level_id=args.level_id, seed=args.seed,
-                 extra_moves=5)) for i in range(env_n)])
+
+    def make_env(n):
+        return lambda: Monitor(gym.make(environment, level_id=args.level_id, seed=args.seed, port=8080 + n,
+                                        docker_control=True, extra_moves=5))
+
+
+    # def make_env():
+    #     return lambda: Monitor(gym.make(environment, level_id=args.level_id, seed=args.seed, extra_moves=5))
+
+    env = SubprocVecEnv([make_env(i) for i in range(env_n)])
 
     eval_env = Monitor(gym.make(environment, level_id=args.level_id, seed=args.seed))
 

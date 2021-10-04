@@ -2,8 +2,8 @@ import gym
 import lg_gym
 from policies import Policies
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.env_util import Monitor
+from stable_baselines3.common.vec_env import SubprocVecEnv
 from datetime import datetime
 import argparse
 
@@ -29,12 +29,12 @@ if __name__ == "__main__":
 
 
         # def make_env(n):
-        #     return lambda: gym.make(environment, level_id=level_id, seed=args.seed, port=8080,
-        #                             log_file=play_log_filename)
+        #     return lambda: Monitor(gym.make(environment, level_id=level_id, seed=args.seed, port=8080,
+        #                             log_file=play_log_filename))
 
         def make_env(n):
-            return lambda: gym.make(environment, level_id=level_id, seed=args.seed, port=8080 + n,
-                                    docker_control=True, log_file=play_log_filename)
+            return lambda: Monitor(gym.make(environment, level_id=level_id, seed=args.seed, port=8080 + n,
+                                            docker_control=True, log_file=play_log_filename))
 
 
         env = SubprocVecEnv([make_env(n) for n in range(n_envs)])

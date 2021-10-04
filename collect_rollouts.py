@@ -1,7 +1,7 @@
 import gym
 import lg_gym
-from stable_baselines3.common.env_util import make_vec_env, Monitor
-from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
+from stable_baselines3.common.env_util import Monitor
+from stable_baselines3.common.vec_env import SubprocVecEnv
 import logging
 import os
 from imitation.data.rollout import generate_trajectories, min_episodes
@@ -52,8 +52,9 @@ if __name__ == "__main__":
 
 
     def make_env(n):
-        return lambda: gym.make(environment, level_id=args.level_id, seed=args.seed, port=8080 + n, docker_control=True,
-                                log_file=log_filename)
+        return lambda: Monitor(
+            gym.make(environment, level_id=args.level_id, seed=args.seed, port=8080 + n, docker_control=True,
+                     log_file=log_filename))
 
 
     env = SubprocVecEnv([make_env(n) for n in range(n_env)])
