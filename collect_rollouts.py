@@ -32,8 +32,8 @@ if __name__ == "__main__":
     parser.add_argument('--job_id', dest='job_id', default="debug", type=str, help="slurm job id, default is debug")
     parser.add_argument('--seed', dest='seed', default=None, type=int)
     parser.add_argument('--best_fraction', dest='best_fraction', default=0.5, type=float)
+    parser.add_argument('--episodes', type=int, default=1000, help="number of episodes to collect")
     parser.add_argument('level_id', type=int, nargs='?', help="level on which the moves are collected")
-    parser.add_argument('episodes', type=int, nargs='?', default=1000, help="number of episodes to collect")
     args = parser.parse_args()
 
     logging.basicConfig(format=f'{args.job_id}:%(asctime)s:%(levelname)s:%(message)s',
@@ -68,4 +68,4 @@ if __name__ == "__main__":
 
     save(playtraces_filename, best_trajectories)
 
-    env.env_method("close")
+    env.close()
