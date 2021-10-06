@@ -11,22 +11,23 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train an agent in a level')
     parser.add_argument('--job_id', dest='job_id', default="local", type=str)
     parser.add_argument('--seed', dest='seed', default=None, type=int)
+    parser.add_argument('--n_envs', type=int, default=8)
+    parser.add_argument('--dockersim', action='store_true')
+    parser.add_argument('--subprocsim', action='store_true')
     parser.add_argument('level_id', default=1, type=int, nargs='?',
                         help="level on which the moves are collected, default is 1")
     args = parser.parse_args()
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
 
-    env_n = 4
+    env_n = args.n_envs
     environment = 'lgenv_small-v0'
 
 
     def make_env(n):
-        return lambda: Monitor(gym.make(environment, level_id=args.level_id, seed=args.seed, port=8080 + n,
-                                        docker_control=True, extra_moves=5))
+        return lambda: Monitor(
+            gym.make(environment, dockersim=args.dockersim, subprocsim=args.subprocsim, level_id=args.level_id,
+                     seed=args.seed, port=8080 + n, extra_moves=5))
 
-
-    # def make_env():
-    #     return lambda: Monitor(gym.make(environment, level_id=args.level_id, seed=args.seed, extra_moves=5))
 
     env = SubprocVecEnv([make_env(i) for i in range(env_n)])
 

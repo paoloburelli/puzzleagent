@@ -11,7 +11,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Test random agent on a level range.')
     parser.add_argument('--job_id', dest='job_id', default="debug", type=str)
     parser.add_argument('--seed', dest='seed', default=None, type=int)
-    parser.add_argument('--episodes', type=int, default=1000, help="number of episodes to collect")
+    parser.add_argument('--episodes', type=int, default=1000)
+    parser.add_argument('--n_envs', type=int, default=8)
+    parser.add_argument('--dockersim', action='store_true')
+    parser.add_argument('--subprocsim', action='store_true')
+    parser.add_argument('policy', type=str)
     parser.add_argument('start_level', type=int)
     parser.add_argument('end_level', type=int, default=None, nargs='?')
     args = parser.parse_args()
@@ -19,31 +23,28 @@ if __name__ == "__main__":
 
     episodes = args.episodes
     environment = 'lgenv_small-v0'
-    n_envs = 4
+    n_envs = args.n_envs
+    extra_moves = 100
 
     start_level = args.start_level
     end_level = args.end_level + 1 if args.end_level is not None else start_level + 1
 
     for level_id in range(args.start_level, end_level):
-        play_log_filename = f"logs/eval/gaussian_random_{timestamp}_{args.job_id}_{start_level}-{end_level - 1}.csv"
+        play_log_filename = f"logs/eval/{args.policy}_{timestamp}_{args.job_id}_{start_level}-{end_level - 1}.csv"
 
 
-        # def make_env(n):
-        #     return lambda: Monitor(gym.make(environment, level_id=level_id, seed=args.seed, port=8080,
-        #                             log_file=play_log_filename))
-
-        def make_env(n):
-            return lambda: Monitor(gym.make(environment, level_id=level_id, seed=args.seed, port=8080 + n,
-                                            docker_control=True, log_file=play_log_filename))
+    def make_env(n):
+        return lambda: Monitor(
+            gym.make(environment, dockersim=args.dockersim, subprocsim=args.subprocsim, level_id=level_id,
+                     seed=args.seed, log_file=play_log_filename,
+                     extra_moves=extra_moves, port=8080 + n))
 
 
-        env = SubprocVecEnv([make_env(n) for n in range(n_envs)])
+    env = SubprocVecEnv([make_env(n) for n in range(n_envs)])
 
-        # policy = Policies.trained_ppo("PPO_61_54788_20210929162609_1", env)
-        # policy = Policies.uniform_random(env)
-        policy = Policies.gaussian_random(env)
+    policy = getattr(Policies, args.policy)(env)
 
-        print(f"Testing {policy.name()} on level {level_id} with seed {args.seed}")
-        mean_reward, std_reward = evaluate_policy(policy, env, n_eval_episodes=episodes, deterministic=False)
-        print(f"mean_reward={mean_reward:.2f} +/- {std_reward}")
-        env.close()
+    print(f"Testing {policy.name()} on level {level_id} with seed {args.seed}")
+    mean_reward, std_reward = evaluate_policy(policy, env, n_eval_episodes=episodes, deterministic=False)
+    print(f"mean_reward={mean_reward:.2f} +/- {std_reward}")
+    env.close()
