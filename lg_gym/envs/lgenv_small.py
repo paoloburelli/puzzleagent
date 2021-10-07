@@ -62,8 +62,8 @@ class LGEnvSmall(gym.Env):
 
         self.board = np.array(self.board_info["board"],
                               dtype=np.uint8).reshape((self.width, self.height, self.input_channels), order='F')
-        self.action_mask = np.clip(self.board[:, :, CLICKABLE_CHANNELS], 0, 1)  # * (
-        # 1 - np.clip(self.board[:, :, NOT_CLICKABLE_CHANNEL], 0, 1))
+        self.action_mask = np.clip(self.board[:, :, CLICKABLE_CHANNELS], 0, 1) * (
+                1 - np.clip(self.board[:, :, NOT_CLICKABLE_CHANNEL], 0, 1))
 
         self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.width, self.height, self.channels),
                                             dtype=np.float32)
@@ -162,8 +162,8 @@ class LGEnvSmall(gym.Env):
                     self.board = np.array(self.board_info["board"],
                                           dtype=np.uint8).reshape((self.width, self.height, self.input_channels),
                                                                   order='F')
-                    self.action_mask = np.clip(self.board[:, :, CLICKABLE_CHANNELS], 0, 1)  # * (
-                    # 1 - np.clip(self.board[:, :, NOT_CLICKABLE_CHANNEL], 0, 1))
+                    self.action_mask = np.clip(self.board[:, :, CLICKABLE_CHANNELS], 0, 1) * (
+                            1 - np.clip(self.board[:, :, NOT_CLICKABLE_CHANNEL], 0, 1))
                 except Exception as e:
                     logging.error(f"click:parse: {e}")
 
