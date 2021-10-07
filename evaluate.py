@@ -29,22 +29,21 @@ if __name__ == "__main__":
     start_level = args.start_level
     end_level = args.end_level + 1 if args.end_level is not None else start_level + 1
 
+    play_log_filename = f"logs/eval/{args.policy}_{timestamp}_{args.job_id}_{start_level}-{end_level - 1}.csv"
+
     for level_id in range(args.start_level, end_level):
-        play_log_filename = f"logs/eval/{args.policy}_{timestamp}_{args.job_id}_{start_level}-{end_level - 1}.csv"
+        def make_env(n):
+            return lambda: Monitor(
+                gym.make(environment, dockersim=args.dockersim, subprocsim=args.subprocsim, level_id=level_id,
+                         seed=args.seed, log_file=play_log_filename,
+                         extra_moves=extra_moves, port=8080 + n))
 
 
-    def make_env(n):
-        return lambda: Monitor(
-            gym.make(environment, dockersim=args.dockersim, subprocsim=args.subprocsim, level_id=level_id,
-                     seed=args.seed, log_file=play_log_filename,
-                     extra_moves=extra_moves, port=8080 + n))
+        env = SubprocVecEnv([make_env(n) for n in range(n_envs)])
 
+        policy = getattr(Policies, args.policy)(env)
 
-    env = SubprocVecEnv([make_env(n) for n in range(n_envs)])
-
-    policy = getattr(Policies, args.policy)(env)
-
-    print(f"Testing {policy.name()} on level {level_id} with seed {args.seed}")
-    mean_reward, std_reward = evaluate_policy(policy, env, n_eval_episodes=episodes, deterministic=False)
-    print(f"mean_reward={mean_reward:.2f} +/- {std_reward}")
-    env.close()
+        print(f"Testing {policy.policy_name} on level {level_id} with seed {args.seed}")
+        mean_reward, std_reward = evaluate_policy(policy, env, n_eval_episodes=episodes, deterministic=False)
+        print(f"mean_reward={mean_reward:.2f} +/- {std_reward}")
+        env.close()

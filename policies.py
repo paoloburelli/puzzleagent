@@ -19,6 +19,7 @@ class Policies:
             self.distribution_y = Y.round().astype(int).tolist()
 
             self.env = env
+            self.policy_name = "gaussian_random"
 
         def __action(self):
             random_index = random.randint(0, self.sample_size - 1)
@@ -30,25 +31,32 @@ class Policies:
             actions = [self.__action() for n in range(self.env.num_envs)]
             return actions, None
 
-        @staticmethod
-        def name():
-            return "gaussian_random"
-
     class __Greedy:
-        def __init__(self, env):
+        def __init__(self, env, simulate=False):
             self.env = env
+            self.simulate = simulate
+            if simulate:
+                self.policy_name = "greedy_sim"
+            else:
+                self.policy_name = "greedy"
 
         def predict(self, obs, state, deterministic):
             actions = [self.__single_prediction(o, am, deterministic) for am, o in
                        zip(self.env.get_attr("action_mask"), obs)]
             return actions, None
 
+        def __score(self, obs, x, y):
+            if self.simulate:
+                return self.env.env_method("simulate_click", (x, y))[0]
+            else:
+                return (obs[x, y, 0] + 3 * obs[x, y, 2]) * (1 + obs[x, y, 1])
+
         def __single_prediction(self, obs, action_mask, deterministric):
             potentially_valid_moves = []
             for x in range(action_mask.shape[0]):
                 for y in range(action_mask.shape[1]):
                     if action_mask[x, y] > 0:
-                        score = (obs[x, y, 0] + 3 * obs[x, y, 2]) * (1 + obs[x, y, 1])
+                        score = self.__score(obs, x, y)
                         potentially_valid_moves.append({'move': (x, y), 'score': score * score})
 
             potentially_valid_moves.sort(key=lambda a: a['score'], reverse=True)
@@ -65,27 +73,20 @@ class Policies:
 
                 return potentially_valid_moves[index]['move']
 
-        @staticmethod
-        def name():
-            return "greedy"
-
     class __RandomUniformPolicy:
         def __init__(self, env):
             self.env = env
+            self.policy_name = "random_uniform"
 
         def predict(self, *args, **kwargs):
             actions = [ap.sample() for ap in self.env.get_attr("action_space")]
             return actions, None
 
-        @staticmethod
-        def name():
-            return "uniform_random"
-
     @staticmethod
     def trained_ppo(train_session, env):
         model_filename = f"logs/test/{train_session}/best_model.zip"
         model = PPO.load(model_filename, env)
-        model.name = lambda: f"trained_ppo[{train_session}]"
+        model.policy_name = f"trained_ppo[{train_session}]"
         return model
 
     @staticmethod
@@ -99,3 +100,7 @@ class Policies:
     @staticmethod
     def greedy(env):
         return Policies.__Greedy(env)
+
+    @staticmethod
+    def greedy_sim(env):
+        return Policies.__Greedy(env, simulate=True)

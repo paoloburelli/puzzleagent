@@ -8,19 +8,22 @@
 #SBATCH --mail-type=END          # Send an email when the job finishes
 
 
-module load Anaconda3
-. $(conda info --base)/etc/profile.d/conda.sh
-conda activate py38
-
+module load Python/3.8.2-GCCcore-9.3.0
+virtualenv venv/$SLURM_JOBID
+source venv/$SLURM_JOBID/bin/activate
 pip3 install -r requirements.txt
+
 export PYTHONPATH=.
 export LC_CTYPE=en_US.UTF-8
+export N_ENVS=8
 
-simulator/linux.x86_64 &
+./simulator/run_sims.sh $N_ENVS
 sleep 5
 
+FLAGS="--job_id $SLURM_JOBID --n_envs $N_ENVS"
+
 if [ -n "$RANDOM_SEED" ]; then
-  python3 collect_rollouts.py --job_id $SLURM_JOBID --seed $RANDOM_SEED $LEVEL_ID
-else
-  python3 collect_rollouts.py --job_id $SLURM_JOBID $LEVEL_ID
+    FLAGS= "$FLAGS --seed $RANDOM_SEED"
 fi
+
+python3 collect_rollouts.py $FLAGS $LEVEL_ID
