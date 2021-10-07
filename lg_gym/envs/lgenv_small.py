@@ -1,3 +1,5 @@
+import random
+
 import gym
 from gym import spaces
 import numpy as np
@@ -36,9 +38,9 @@ class LGEnvSmall(gym.Env):
         self.extra_moves = extra_moves
 
         self.simulator = Simulator(host, port)
-        self.level_id = level_id
+        self._level_id = level_id
 
-        self.game = self.simulator.session_create(self.level_id, self.get_seed())
+        self.game = self.simulator.session_create(self._get_level_id(), self.get_seed())
         self.board_info = json.loads(self.game["multichannelArrayState"])
 
         self.clicks_limit = self.game['levelMoveLimit'] * CLICKS_MULTIPLIER
@@ -68,6 +70,12 @@ class LGEnvSmall(gym.Env):
         self.valid_moves = 0
         self.goals_collected = 0
         self.cumulative_reward = 0
+
+    def _get_level_id(self):
+        if type(self._level_id) is tuple:
+            return random.randint(self._level_id[0], self._level_id[1])
+        else:
+            return self._level_id
 
     def _observation_from_board(self, board):
 
@@ -186,7 +194,7 @@ class LGEnvSmall(gym.Env):
         if done and self.log_file:
             with open(self.log_file, 'a+') as f:
                 f.write(
-                    f"""{datetime.now().strftime('%Y%m%d%H%M%S')},{self.get_seed()},{self.spec.id},{self.level_id},{self.valid_moves_limit},{self.clicks_limit},{self.collect_goals},{self.valid_moves},{self.clicks},{self.goals_collected},{self.cumulative_reward}\n""")
+                    f"""{datetime.now().strftime('%Y%m%d%H%M%S')},{self.get_seed()},{self.spec.id},{self._get_level_id()},{self.valid_moves_limit},{self.clicks_limit},{self.collect_goals},{self.valid_moves},{self.clicks},{self.goals_collected},{self.cumulative_reward}\n""")
                 f.close()
 
         return obs, reward, done, {'x': x, 'y': y, 'click_successful': click_successfull,
@@ -199,7 +207,7 @@ class LGEnvSmall(gym.Env):
         except Exception as e:
             logging.error(f"reset: {e}")
 
-        self.game = self.simulator.session_create(self.level_id, self.get_seed())
+        self.game = self.simulator.session_create(self._get_level_id(), self.get_seed())
         self.board_info = json.loads(self.game["multichannelArrayState"])
 
         self.clicks = 0

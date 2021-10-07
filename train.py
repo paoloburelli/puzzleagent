@@ -14,36 +14,43 @@ if __name__ == "__main__":
     parser.add_argument('--n_envs', type=int, default=8)
     parser.add_argument('--dockersim', action='store_true')
     parser.add_argument('--subprocsim', action='store_true')
-    parser.add_argument('level_id', default=1, type=int, nargs='?',
-                        help="level on which the moves are collected, default is 1")
+    parser.add_argument('start_level', type=int)
+    parser.add_argument('end_level', type=int, default=None, nargs='?')
+    # parser.add_argument('level_id', default=1, type=int, nargs='?',
+    #                     help="level on which the moves are collected, default is 1")
     args = parser.parse_args()
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
 
     env_n = args.n_envs
     environment = 'lgenv_small-v0'
 
+    if args.end_level is None:
+        level_id = args.start_level
+    else:
+        level_id = (args.start_level, args.end_level)
+
 
     def make_env(n):
         return lambda: Monitor(
-            gym.make(environment, dockersim=args.dockersim, subprocsim=args.subprocsim, level_id=args.level_id,
+            gym.make(environment, dockersim=args.dockersim, subprocsim=args.subprocsim, level_id=level_id,
                      seed=args.seed, port=8080 + n, extra_moves=5))
 
 
     env = SubprocVecEnv([make_env(i) for i in range(env_n)])
 
-    eval_env = Monitor(gym.make(environment, level_id=args.level_id, seed=args.seed))
+    eval_env = Monitor(gym.make(environment, level_id=level_id, seed=args.seed))
 
     model = PPO(policy="MlpPolicy", env=env, verbose=1, tensorboard_log="logs/train/", n_steps=2000)
 
     callback_on_best = StopTrainingOnRewardThreshold(reward_threshold=0.9, verbose=1)
     eval_callback = EvalCallback(eval_env, callback_on_new_best=callback_on_best, verbose=1,
-                                 best_model_save_path=f'logs/test/{model.__class__.__name__}_{args.level_id}_{args.job_id}_{timestamp}_1/',
+                                 best_model_save_path=f'logs/test/{model.__class__.__name__}_{level_id}_{args.job_id}_{timestamp}_1/',
                                  log_path='logs/test/', eval_freq=2000,
                                  deterministic=False, render=False, n_eval_episodes=10)
 
     model.learn(100000000, callback=eval_callback,
-                tb_log_name=f'{model.__class__.__name__}_{args.level_id}_{args.job_id}_{timestamp}')
-    model.save(f"models/saved/{model.__class__.__name__}_{args.level_id}_{args.job_id}_{timestamp}.zip")
+                tb_log_name=f'{model.__class__.__name__}_{level_id}_{args.job_id}_{timestamp}')
+    model.save(f"models/saved/{model.__class__.__name__}_{level_id}_{args.job_id}_{timestamp}.zip")
     env.close()
 
     # from models.cnnrl import CustomCnnPPO, CustomCnnA2C
