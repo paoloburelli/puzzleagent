@@ -3,7 +3,7 @@
 #SBATCH --job-name=train_agent        # Job name
 #SBATCH --output=job.%j.out      # Name of output file (%j expands to jobId)
 #SBATCH --cpus-per-task=16       # Schedule one core
-#SBATCH --time=72:00:00          # Run time (hh:mm:ss) - run for one hour max
+#SBATCH --time=96:00:00          # Run time (hh:mm:ss) - run for one hour max
 #SBATCH --partition=red,brown    # Run on either the Red or Brown queue
 #SBATCH --mail-type=END          # Send an email when the job finishes
 
