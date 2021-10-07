@@ -13,6 +13,7 @@ CLICKABLE_CHANNELS = 7
 NOT_CLICKABLE_CHANNEL = 8
 COLLECT_GOAL_CHANNEL = 9
 BASIC_PIECE_CHANNEL = 10
+HITTABLE_BY_NEIGHBOUR = 21
 
 
 class LGEnvSmall(gym.Env):
@@ -24,10 +25,11 @@ class LGEnvSmall(gym.Env):
         return np.random.randint(100000) if self._seed is None else self._seed
 
     def __init__(self, level_id, host="localhost", port=8080, seed=None, log_file=None, extra_moves=0,
-                 docker_control=False):
+                 dockersim=False, subprocsim=False):
         super().__init__()
 
-        self.docker_container = Simulator.start_container(port) if docker_control else None
+        self.simulator_docker = Simulator.start_container(port) if dockersim else None
+        self.simulator_subprocess = Simulator.start_process(port) if subprocsim else None
 
         self.log_file = log_file
         self._seed = seed
@@ -50,7 +52,8 @@ class LGEnvSmall(gym.Env):
 
         self.board = np.array(self.board_info["board"],
                               dtype=np.uint8).reshape((self.width, self.height, self.input_channels), order='F')
-        self.action_mask = (1 - self.board[:, :, NOT_CLICKABLE_CHANNEL]) * self.board[:, :, PIECES_CHANNEL]
+        self.action_mask = (1 - np.clip(self.board[:, :, NOT_CLICKABLE_CHANNEL], 0, 1)) * np.clip(self.board[:, :,
+                                                                                                  PIECES_CHANNEL], 0, 1)
 
         self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.width, self.height, self.channels),
                                             dtype=np.float32)
@@ -83,10 +86,53 @@ class LGEnvSmall(gym.Env):
                         else:
                             obs[x, y, 0] = 0
 
+        for x in range(self.width):
+            for y in range(self.height):
+                if board[x, y, COLLECT_GOAL_CHANNEL] > 0:
+                    if board[x, y, HITTABLE_BY_NEIGHBOUR] > 0:
+                        if x < self.width - 1:
+                            obs[x + 1, y, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
+                        if y < self.height - 1:
+                            obs[x, y + 1, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
+                        if x > 0:
+                            obs[x - 1, y, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
+                        if y > 0:
+                            obs[x, y - 1, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
+                    else:
+                        obs[x, y, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
+
         obs[:, :, 0] /= 5  # adjacent of the same colour
-        obs[:, :, 1] = board[:, :, COLLECT_GOAL_CHANNEL] / 100  # goals remaining
+        obs[:, :, 1] /= 800  # goals remaining
         obs[:, :, 2] = (board[:, :, 11] + board[:, :, 12] + board[:, :, 13] + board[:, :, 14])  # power pieces
         return obs
+
+    def simulate_click(self, action):
+        x = int(action[0] - (self.width // 2))
+        y = int(action[1] - (self.height // 2))
+
+        reward = 0
+
+        if self.action_mask[action[0], action[1]] > 0:
+            try:
+                result = self.simulator.session_click(self.game['sessionId'], x, y, dry_run=True)
+                board_info = json.loads(result["multichannelArrayState"])
+                if result['clickSuccessful']:
+                    reward += self.valid_moves_reward
+
+                    if self.goals_collected < self.collect_goals - board_info['collectGoalRemaining']:
+                        reward += self.goal_collection_reward
+                else:
+                    reward += self.invalid_action_penalty
+
+                if board_info['collectGoalRemaining'] < 1:
+                    reward += self.completion_reward + 2 * self.valid_moves_reward * (
+                            self.valid_moves_limit - self.valid_moves)
+            except Exception as e:
+                logging.error(f"simulate_click: {e}")
+        else:
+            reward += self.invalid_action_penalty
+
+        return reward
 
     def step(self, action):
         x = int(action[0] - (self.width // 2))
@@ -169,8 +215,11 @@ class LGEnvSmall(gym.Env):
         except Exception as e:
             logging.error(f"close: {e}")
 
-        if self.docker_container is not None:
-            Simulator.stop_container(self.docker_container)
+        if self.simulator_docker is not None:
+            Simulator.stop_container(self.simulator_docker)
+
+        if self.simulator_subprocess is not None:
+            Simulator.stop_process(self.simulator_subprocess)
 
     def render(self, mode='human', close=False):
         pass
