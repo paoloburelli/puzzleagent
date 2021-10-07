@@ -38,9 +38,17 @@ class LGEnvSmall(gym.Env):
         self.extra_moves = extra_moves
 
         self.simulator = Simulator(host, port)
-        self._level_id = level_id
+        self._level_id_config = level_id
 
-        self.game = self.simulator.session_create(self._get_level_id(), self.get_seed())
+        self.init()
+
+    def init(self):
+        if type(self._level_id_config) is tuple:
+            self.current_level_id = random.randint(self._level_id_config[0], self._level_id_config[1])
+        else:
+            self.current_level_id = self._level_id_config
+
+        self.game = self.simulator.session_create(self.current_level_id, self.get_seed())
         self.board_info = json.loads(self.game["multichannelArrayState"])
 
         self.clicks_limit = self.game['levelMoveLimit'] * CLICKS_MULTIPLIER
@@ -54,8 +62,8 @@ class LGEnvSmall(gym.Env):
 
         self.board = np.array(self.board_info["board"],
                               dtype=np.uint8).reshape((self.width, self.height, self.input_channels), order='F')
-        self.action_mask = (1 - np.clip(self.board[:, :, NOT_CLICKABLE_CHANNEL], 0, 1)) * np.clip(self.board[:, :,
-                                                                                                  PIECES_CHANNEL], 0, 1)
+        self.action_mask = np.clip(self.board[:, :, CLICKABLE_CHANNELS], 0, 1)  # * (
+        # 1 - np.clip(self.board[:, :, NOT_CLICKABLE_CHANNEL], 0, 1))
 
         self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.width, self.height, self.channels),
                                             dtype=np.float32)
@@ -71,36 +79,31 @@ class LGEnvSmall(gym.Env):
         self.goals_collected = 0
         self.cumulative_reward = 0
 
-    def _get_level_id(self):
-        if type(self._level_id) is tuple:
-            return random.randint(self._level_id[0], self._level_id[1])
-        else:
-            return self._level_id
+    @staticmethod
+    def _observation_from_board(width, height, channels, action_mask, board):
 
-    def _observation_from_board(self, board):
+        obs = np.zeros((width, height, channels), dtype=np.float32)
 
-        obs = np.zeros((self.width, self.height, self.channels), dtype=np.float32)
-
-        for x in range(self.width):
-            for y in range(self.height):
-                if board[x, y, NOT_CLICKABLE_CHANNEL] == 0 and board[x, y, PIECES_CHANNEL] == 1:
+        for x in range(width):
+            for y in range(height):
+                if action_mask[x, y] > 0:
                     for c in COLOUR_CHANNELS:
                         if board[x, y, c] > 0:
-                            obs[x, y, 0] = (board[x + 1, y, c] if x + 1 < self.width else 0) + (
+                            obs[x, y, 0] = (board[x + 1, y, c] if x + 1 < width else 0) + (
                                 board[x - 1, y, c] if x - 1 > 0 else 0) + (
-                                               board[x, y + 1, c] if y + 1 < self.height else 0) + (
+                                               board[x, y + 1, c] if y + 1 < height else 0) + (
                                                board[x, y - 1, c] if y - 1 > 0 else 0) + (board[x, y, c])
                             break
                         else:
                             obs[x, y, 0] = 0
 
-        for x in range(self.width):
-            for y in range(self.height):
+        for x in range(width):
+            for y in range(height):
                 if board[x, y, COLLECT_GOAL_CHANNEL] > 0:
                     if board[x, y, HITTABLE_BY_NEIGHBOUR] > 0:
-                        if x < self.width - 1:
+                        if x < width - 1:
                             obs[x + 1, y, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
-                        if y < self.height - 1:
+                        if y < height - 1:
                             obs[x, y + 1, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
                         if x > 0:
                             obs[x - 1, y, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
@@ -159,7 +162,8 @@ class LGEnvSmall(gym.Env):
                     self.board = np.array(self.board_info["board"],
                                           dtype=np.uint8).reshape((self.width, self.height, self.input_channels),
                                                                   order='F')
-                    self.action_mask = 1 - self.board[:, :, NOT_CLICKABLE_CHANNEL]
+                    self.action_mask = np.clip(self.board[:, :, CLICKABLE_CHANNELS], 0, 1)  # * (
+                    # 1 - np.clip(self.board[:, :, NOT_CLICKABLE_CHANNEL], 0, 1))
                 except Exception as e:
                     logging.error(f"click:parse: {e}")
 
@@ -188,13 +192,13 @@ class LGEnvSmall(gym.Env):
                self.clicks >= self.clicks_limit or \
                self.valid_moves >= self.valid_moves_limit + self.extra_moves
 
-        obs = self._observation_from_board(self.board)
+        obs = LGEnvSmall._observation_from_board(self.width, self.height, self.channels, self.action_mask, self.board)
 
         self.cumulative_reward += reward
         if done and self.log_file:
             with open(self.log_file, 'a+') as f:
                 f.write(
-                    f"""{datetime.now().strftime('%Y%m%d%H%M%S')},{self.get_seed()},{self.spec.id},{self._get_level_id()},{self.valid_moves_limit},{self.clicks_limit},{self.collect_goals},{self.valid_moves},{self.clicks},{self.goals_collected},{self.cumulative_reward}\n""")
+                    f"""{datetime.now().strftime('%Y%m%d%H%M%S')},{self.get_seed()},{self.spec.id},{self.current_level_id},{self.valid_moves_limit},{self.clicks_limit},{self.collect_goals},{self.valid_moves},{self.clicks},{self.goals_collected},{self.cumulative_reward}\n""")
                 f.close()
 
         return obs, reward, done, {'x': x, 'y': y, 'click_successful': click_successfull,
@@ -207,15 +211,9 @@ class LGEnvSmall(gym.Env):
         except Exception as e:
             logging.error(f"reset: {e}")
 
-        self.game = self.simulator.session_create(self._get_level_id(), self.get_seed())
-        self.board_info = json.loads(self.game["multichannelArrayState"])
+        self.init()
 
-        self.clicks = 0
-        self.valid_moves = 0
-        self.goals_collected = 0
-        self.cumulative_reward = 0
-
-        return self._observation_from_board(self.board)
+        return LGEnvSmall._observation_from_board(self.width, self.height, self.channels, self.action_mask, self.board)
 
     def close(self):
         try:
