@@ -15,6 +15,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_envs', type=int, default=8)
     parser.add_argument('--dockersim', action='store_true')
     parser.add_argument('--subprocsim', action='store_true')
+    parser.add_argument('--train_session', dest='train_session', default=None, type=str)
     parser.add_argument('policy', type=str)
     parser.add_argument('start_level', type=int)
     parser.add_argument('end_level', type=int, default=None, nargs='?')
@@ -41,7 +42,10 @@ if __name__ == "__main__":
 
         env = SubprocVecEnv([make_env(n) for n in range(n_envs)])
 
-        policy = getattr(Policies, args.policy)(env)
+        if args.policy == "trained_ppo":
+            policy = Policies.trained_ppo(args.train_session, env)
+        else:
+            policy = getattr(Policies, args.policy)(env)
 
         print(f"Testing {policy.policy_name} on level {level_id} with seed {args.seed}")
         mean_reward, std_reward = evaluate_policy(policy, env, n_eval_episodes=episodes, deterministic=False)
