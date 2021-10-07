@@ -51,13 +51,14 @@ class Simulator(object):
             'returnFullState': return_full_state
         })
 
-    def session_click(self, sessionId: str, x: int, y: int, return_full_state: bool = False) -> object:
+    def session_click(self, sessionId: str, x: int, y: int, dry_run=False, return_full_state: bool = False) -> object:
         try:
             result = self._do_request('/session/click', {
                 'sessionId': sessionId,
                 'x': x,
                 'y': y,
-                'returnFullState': return_full_state
+                'returnFullState': return_full_state,
+                'dryRun': dry_run
             })
         except requests.HTTPError as e:  # Workaround because error sometimes occurs
             result = self._do_request('/session/click', {
