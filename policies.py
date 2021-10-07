@@ -85,7 +85,9 @@ class Policies:
     @staticmethod
     def trained_ppo(train_session, env):
         model_filename = f"logs/test/{train_session}/best_model.zip"
-        model = PPO.load(model_filename, env)
+        base = PPO("MlpPolicy", env)
+        model = PPO.load(model_filename, env,
+                         custom_objects={'lr_schedule': base.lr_schedule, 'clip_range': base.clip_range})
         model.policy_name = f"trained_ppo[{train_session}]"
         return model
 
