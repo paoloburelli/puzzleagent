@@ -16,11 +16,11 @@ class CustomCNN(BaseFeaturesExtractor):
         super(CustomCNN, self).__init__(observation_space, features_dim)
         # We assume CxHxW images (channels first)
         # Re-ordering will be done by pre-preprocessing or wrapper
-        n_input_channels = observation_space.shape[0]
+        # n_input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 64, kernel_size=(4, 4), stride=(2, 2), padding=0),
+            nn.Conv3d(1, 32, kernel_size=(4, 4, 4), stride=(1, 1, 1), padding=0),
             nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=0),
+            nn.Conv3d(32, 16, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=0),
             nn.ReLU(),
             nn.Flatten(),
         )
@@ -50,6 +50,3 @@ class CustomCnnPPO(PPO):
             super().__init__(*args, **kwargs)
         else:
             super().__init__('CnnPolicy', policy_kwargs=policy_kwargs, *args, **kwargs)
-
-    # def pretrain(self, playtrace):
-    #     self.pol
