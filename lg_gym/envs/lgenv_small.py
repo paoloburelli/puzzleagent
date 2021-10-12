@@ -65,6 +65,8 @@ class LGEnvSmall(gym.Env):
         self.action_mask = np.clip(self.board[:, :, CLICKABLE_CHANNELS], 0, 1) * (
                 1 - np.clip(self.board[:, :, NOT_CLICKABLE_CHANNEL], 0, 1))
 
+        self.collect_goals_max = self.board[:, :, COLLECT_GOAL_CHANNEL].max()
+
         self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.width, self.height, self.channels),
                                             dtype=np.float32)
         self.action_space = spaces.MultiDiscrete([self.width, self.height])
@@ -79,10 +81,22 @@ class LGEnvSmall(gym.Env):
         self.goals_collected = 0
         self.cumulative_reward = 0
 
+    def action_masks(self):
+        return [sum(self.action_mask[x, :]) > 0 for x in range(self.width)] + [sum(self.action_mask[:, y]) > 0 for y in
+                                                                               range(self.height)]
+
     @staticmethod
-    def _observation_from_board(width, height, channels, action_mask, board):
+    def _observation_from_board(width, height, channels, action_mask, board, collect_goals_max):
 
         obs = np.zeros((width, height, channels), dtype=np.float32)
+
+        colours = np.zeros((width, height), dtype=np.uint8)
+
+        for x in range(width):
+            for y in range(height):
+                for c in COLOUR_CHANNELS:
+                    if board[x, y, c] > 0:
+                        colours[x, y] = c
 
         for x in range(width):
             for y in range(height):
@@ -90,9 +104,9 @@ class LGEnvSmall(gym.Env):
                     for c in COLOUR_CHANNELS:
                         if board[x, y, c] > 0:
                             obs[x, y, 0] = (board[x + 1, y, c] if x + 1 < width else 0) + (
-                                board[x - 1, y, c] if x - 1 > 0 else 0) + (
+                                board[x - 1, y, c] if x > 0 else 0) + (
                                                board[x, y + 1, c] if y + 1 < height else 0) + (
-                                               board[x, y - 1, c] if y - 1 > 0 else 0) + (board[x, y, c])
+                                               board[x, y - 1, c] if y > 0 else 0) + (board[x, y, c])
                             break
                         else:
                             obs[x, y, 0] = 0
@@ -101,20 +115,21 @@ class LGEnvSmall(gym.Env):
             for y in range(height):
                 if board[x, y, COLLECT_GOAL_CHANNEL] > 0:
                     if board[x, y, HITTABLE_BY_NEIGHBOUR] > 0:
-                        if x < width - 1:
-                            obs[x + 1, y, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
-                        if y < height - 1:
-                            obs[x, y + 1, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
-                        if x > 0:
-                            obs[x - 1, y, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
-                        if y > 0:
-                            obs[x, y - 1, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
-                    else:
-                        obs[x, y, 1] += board[x, y, COLLECT_GOAL_CHANNEL]
 
-        obs[:, :, 0] /= 5  # adjacent of the same colour
-        obs[:, :, 1] /= 800  # goals remaining
-        obs[:, :, 2] = (board[:, :, 11] + board[:, :, 12] + board[:, :, 13] + board[:, :, 14])  # power pieces
+                        if x + 1 < width and colours[x + 1, y] == colours[x, y]:
+                            obs[x + 1, y, 1] += board[x, y, COLLECT_GOAL_CHANNEL] / collect_goals_max
+                        if y + 1 < height and colours[x, y + 1] == colours[x, y]:
+                            obs[x, y + 1, 1] += board[x, y, COLLECT_GOAL_CHANNEL] / collect_goals_max
+                        if x > 0 and colours[x - 1, y] == colours[x, y]:
+                            obs[x - 1, y, 1] += board[x, y, COLLECT_GOAL_CHANNEL] / collect_goals_max
+                        if y > 0 and colours[x, y - 1] == colours[x, y]:
+                            obs[x, y - 1, 1] += board[x, y, COLLECT_GOAL_CHANNEL] / collect_goals_max
+                    else:
+                        obs[x, y, 1] += board[x, y, COLLECT_GOAL_CHANNEL] / collect_goals_max
+
+            obs[:, :, 0] /= 5  # adjacent of the same colour
+            obs[:, :, 1] /= 4  # goals remaining
+            obs[:, :, 2] = (board[:, :, 11] + board[:, :, 12] + board[:, :, 13] + board[:, :, 14])  # power pieces
         return obs
 
     def simulate_click(self, action):
@@ -192,7 +207,8 @@ class LGEnvSmall(gym.Env):
                self.clicks >= self.clicks_limit or \
                self.valid_moves >= self.valid_moves_limit + self.extra_moves
 
-        obs = LGEnvSmall._observation_from_board(self.width, self.height, self.channels, self.action_mask, self.board)
+        obs = LGEnvSmall._observation_from_board(self.width, self.height, self.channels, self.action_mask, self.board,
+                                                 self.collect_goals_max)
 
         self.cumulative_reward += reward
         if done and self.log_file:
@@ -213,7 +229,8 @@ class LGEnvSmall(gym.Env):
 
         self.init()
 
-        return LGEnvSmall._observation_from_board(self.width, self.height, self.channels, self.action_mask, self.board)
+        return LGEnvSmall._observation_from_board(self.width, self.height, self.channels, self.action_mask, self.board,
+                                                  self.collect_goals_max)
 
     def close(self):
         try:

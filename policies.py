@@ -1,4 +1,6 @@
 from stable_baselines3.ppo import PPO
+from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
+from sb3_contrib.ppo_mask import MaskablePPO
 import random
 from scipy.stats import truncnorm
 
@@ -71,7 +73,8 @@ class Policies:
                     index += 1
                     rolling_sum += potentially_valid_moves[index]['score']
 
-                return potentially_valid_moves[index]['move']
+                cl_index = max(0, min(len(potentially_valid_moves) - 1, index))
+                return potentially_valid_moves[cl_index]['move']
 
     class __RandomUniformPolicy:
         def __init__(self, env):
@@ -89,6 +92,15 @@ class Policies:
         model = PPO.load(model_filename, env,
                          custom_objects={'lr_schedule': base.lr_schedule, 'clip_range': base.clip_range})
         model.policy_name = f"trained_ppo[{train_session}]"
+        return model
+
+    @staticmethod
+    def trained_maskable_ppo(train_session, env):
+        model_filename = f"logs/test/{train_session}/best_model.zip"
+        base = MaskablePPO(MaskableActorCriticPolicy, env)
+        model = MaskablePPO.load(model_filename, env,
+                                 custom_objects={'lr_schedule': base.lr_schedule, 'clip_range': base.clip_range})
+        model.policy_name = f"trained_maskable_ppo[{train_session}]"
         return model
 
     @staticmethod

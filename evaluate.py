@@ -42,8 +42,8 @@ if __name__ == "__main__":
 
         env = SubprocVecEnv([make_env(n) for n in range(n_envs)])
 
-        if args.policy == "trained_ppo":
-            policy = Policies.trained_ppo(args.train_session, env)
+        if "ppo" in args.policy:
+            policy = getattr(Policies, args.policy)(args.train_session, env)
         else:
             policy = getattr(Policies, args.policy)(env)
 

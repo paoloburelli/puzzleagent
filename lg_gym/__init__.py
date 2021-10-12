@@ -9,8 +9,3 @@ register(
     id='lgenv_small-v0',
     entry_point='lg_gym.envs:LGEnvSmall',
 )
-
-register(
-    id='lgenv_medium-v0',
-    entry_point='lg_gym.envs:LGEnvMedium',
-)
