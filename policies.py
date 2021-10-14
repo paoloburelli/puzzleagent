@@ -34,13 +34,15 @@ class Policies:
             return actions, None
 
     class __Greedy:
-        def __init__(self, env, simulate=False):
+        def __init__(self, env, simulate=False, sample=1.0):
             self.env = env
             self.simulate = simulate
             if simulate:
                 self.policy_name = "greedy_sim"
             else:
                 self.policy_name = "greedy"
+
+            self.sample = sample
 
         def predict(self, obs, state, deterministic):
             actions = [self.__single_prediction(o, am, deterministic) for am, o in
@@ -57,7 +59,7 @@ class Policies:
             potentially_valid_moves = []
             for x in range(action_mask.shape[0]):
                 for y in range(action_mask.shape[1]):
-                    if action_mask[x, y] > 0:
+                    if action_mask[x, y] > 0 and random.random() <= self.sample:
                         score = self.__score(obs, x, y)
                         potentially_valid_moves.append({'move': (x, y), 'score': score * score})
 
@@ -117,4 +119,4 @@ class Policies:
 
     @staticmethod
     def greedy_sim(env):
-        return Policies.__Greedy(env, simulate=True)
+        return Policies.__Greedy(env, simulate=True, sample=0.3)

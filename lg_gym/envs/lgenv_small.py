@@ -90,7 +90,7 @@ class LGEnvSmall(gym.Env):
 
         self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(self.width, self.height, self.channels),
                                             dtype=np.float32)
-        self.action_space = spaces.Discrete(self.width * self.height)
+        self.action_space = spaces.MultiDiscrete([self.width, self.height])
 
         self.valid_moves_reward = 0.2 / self.valid_moves_limit
         self.goal_collection_reward = 0.2 / self.collect_goals
@@ -103,7 +103,8 @@ class LGEnvSmall(gym.Env):
         self.cumulative_reward = 0
 
     def action_masks(self):
-        return np.reshape(self.action_mask, self.width * self.height, order='F')
+        return [sum(self.action_mask[x, :]) > 0 for x in range(self.width)] + [sum(self.action_mask[:, y]) > 0 for y in
+                                                                               range(self.height)]
 
     @staticmethod
     def _observation_from_board(width, height, channels, action_mask, board, collect_goals_max):
@@ -153,14 +154,12 @@ class LGEnvSmall(gym.Env):
         return obs
 
     def simulate_click(self, action):
-        x_index = action % self.width
-        y_index = action // self.width
-        x = int(x_index - (self.width // 2))
-        y = int(y_index - (self.height // 2))
+        x = int(action[0] - (self.width // 2))
+        y = int(action[1] - (self.height // 2))
 
         reward = 0
 
-        if self.action_mask[x_index, y_index] > 0:
+        if self.action_mask[action[0], action[1]] > 0:
             try:
                 result = self.simulator.session_click(self.game['sessionId'], x, y, dry_run=True)
                 board_info = json.loads(result["multichannelArrayState"])
@@ -183,17 +182,15 @@ class LGEnvSmall(gym.Env):
         return reward
 
     def step(self, action):
-        x_index = action % self.width
-        y_index = action // self.width
-        x = int(x_index - (self.width // 2))
-        y = int(y_index - (self.height // 2))
+        x = int(action[0] - (self.width // 2))
+        y = int(action[1] - (self.height // 2))
         reward = 0
 
         self.clicks += 1
 
         click_successfull = False
 
-        if self.action_mask[x_index, y_index] > 0:
+        if self.action_mask[action[0], action[1]] > 0:
             try:
                 result = self.simulator.session_click(self.game['sessionId'], x, y, False)
                 try:

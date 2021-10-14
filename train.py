@@ -8,6 +8,8 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 from stable_baselines3.ppo import PPO
 from models.cnnrl import CnnPPO, MaskableCnnPPO
+from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
+from sb3_contrib.ppo_mask import MaskablePPO
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train an agent in a level')
@@ -18,6 +20,7 @@ if __name__ == "__main__":
     parser.add_argument('--subprocsim', action='store_true')
     parser.add_argument('start_level', type=int)
     parser.add_argument('end_level', type=int, default=None, nargs='?')
+    parser.add_argument('episodes_per_level', type=int, default=None, nargs='?')
     # parser.add_argument('level_id', default=1, type=int, nargs='?',
     #                     help="level on which the moves are collected, default is 1")
     args = parser.parse_args()
@@ -27,9 +30,13 @@ if __name__ == "__main__":
     environment = 'lgenv_small-v0'
 
     if args.end_level is None:
-        level_id = args.start_level
+        level_id = args.start_level  # Just one level
     else:
-        level_id = (args.start_level, args.end_level)
+        if args.episodes_per_level is not None:  # Curriculum in a range
+            level_id = [{'level_id': l, 'episodes': args.episodes_per_level} for l in
+                        range(args.start_level, args.end_level)]
+        else:
+            level_id = (args.start_level, args.end_level)  # Random levels in a range
 
 
     def make_env(n):
@@ -38,25 +45,39 @@ if __name__ == "__main__":
                      seed=args.seed, port=8080 + n, extra_moves=5))
 
 
+    def make_eval_env(n):
+        if type(level_id) is list:
+            env_level_id = [{'level_id': l['level_id'], 'episodes': 1} for l in level_id]
+        else:
+            env_level_id = level_id
+        return lambda: Monitor(
+            gym.make(environment, train=False, dockersim=args.dockersim, subprocsim=args.subprocsim,
+                     level_id=env_level_id,
+                     seed=args.seed, port=8080 + n))
+
+
     env = SubprocVecEnv([make_env(i) for i in range(env_n)])
 
-    eval_env = SubprocVecEnv([make_env(i) for i in range(env_n // 2)])
+    eval_env = SubprocVecEnv([make_eval_env(i) for i in range(env_n)])
 
-    # model = PPO(policy="MlpPolicy", env=env, verbose=1, tensorboard_log="logs/train/")
+    model = PPO(policy="MlpPolicy", env=env, verbose=1, tensorboard_log="logs/train/")
 
     # model = MaskablePPO(MaskableActorCriticPolicy, env=env, verbose=1, tensorboard_log="logs/train/")
 
     # model = CnnPPO(env=env, verbose=1, tensorboard_log="logs/train/", n_steps=2048)
 
-    model = MaskableCnnPPO(env=env, verbose=1, tensorboard_log="logs/train/", n_steps=2048)
+    # model = MaskableCnnPPO(env=env, verbose=1, tensorboard_log="logs/train/", n_steps=2048)
+
+    level_name = level_id if type(level_id) is not list else list(range(args.start_level, args.end_level))
 
     callback_on_best = StopTrainingOnRewardThreshold(reward_threshold=0.9, verbose=1)
     eval_callback = EvalCallback(eval_env, callback_on_new_best=callback_on_best, verbose=1,
-                                 best_model_save_path=f'logs/test/{model.__class__.__name__}_{level_id}_{args.job_id}_{timestamp}_1/',
-                                 log_path='logs/test/', eval_freq=4096,
-                                 deterministic=False, render=False, n_eval_episodes=10)
+                                 best_model_save_path=f'logs/test/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}_1/',
+                                 log_path='logs/test/', eval_freq=4096 * env_n,
+                                 deterministic=False, render=False,
+                                 n_eval_episodes=(len(level_id) if type(level_id) is list else 10) * env_n)
 
     model.learn(100000000, callback=eval_callback,
-                tb_log_name=f'{model.__class__.__name__}_{level_id}_{args.job_id}_{timestamp}')
-    model.save(f"models/saved/{model.__class__.__name__}_{level_id}_{args.job_id}_{timestamp}.zip")
+                tb_log_name=f'{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}')
+    model.save(f"models/saved/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}.zip")
     env.close()
