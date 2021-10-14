@@ -27,7 +27,7 @@ class LGEnvSmall(gym.Env):
         return np.random.randint(100000) if self._seed is None else self._seed
 
     def __init__(self, level_id, host="localhost", port=8080, seed=None, log_file=None, extra_moves=0,
-                 dockersim=False, subprocsim=False):
+                 dockersim=False, subprocsim=False, train=True):
         super().__init__()
 
         self.simulator_docker = Simulator.start_container(port) if dockersim else None
@@ -39,14 +39,35 @@ class LGEnvSmall(gym.Env):
 
         self.simulator = Simulator(host, port)
         self._level_id_config = level_id
+        self.train = train
+        logging.basicConfig(format='%(asctime)s:%(levelname)s:%(message)s', level=logging.INFO)
 
-        self.init()
+        self._reset(init=True)
 
-    def init(self):
+    def _reset(self, init=False):
+
+        if init:
+            self.episode = 0
+            self.curriculum_step_ep = -1
+            self.curriculum_step = 0
+        else:
+            self.episode += 1
+
         if type(self._level_id_config) is tuple:
             self.current_level_id = random.randint(self._level_id_config[0], self._level_id_config[1])
+        elif type(self._level_id_config) is list:
+            next_step = self.curriculum_step_ep + 1
+            self.curriculum_step_ep = next_step % self._level_id_config[self.curriculum_step]['episodes']
+            self.curriculum_step += next_step // self._level_id_config[self.curriculum_step]['episodes']
+            self.curriculum_step %= len(self._level_id_config)
+
+            self.current_level_id = self._level_id_config[self.curriculum_step]['level_id']
         else:
             self.current_level_id = self._level_id_config
+
+        logging.info(f"{self.__class__.__name__}[{'train' if self.train else 'eval'}]: "
+                     f"init level {self.current_level_id}, episode {self.episode}, "
+                     f"curriculum step {self.curriculum_step}, curriculum step ep {self.curriculum_step_ep}")
 
         self.game = self.simulator.session_create(self.current_level_id, self.get_seed())
         self.board_info = json.loads(self.game["multichannelArrayState"])
@@ -227,7 +248,7 @@ class LGEnvSmall(gym.Env):
         except Exception as e:
             logging.error(f"reset: {e}")
 
-        self.init()
+        self._reset()
 
         return LGEnvSmall._observation_from_board(self.width, self.height, self.channels, self.action_mask, self.board,
                                                   self.collect_goals_max)
