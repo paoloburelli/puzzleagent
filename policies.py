@@ -4,6 +4,8 @@ from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 from sb3_contrib.ppo_mask import MaskablePPO
 import random
 from scipy.stats import truncnorm
+from numpy.random import choice
+import logging
 
 
 class Policies:
@@ -55,7 +57,7 @@ class Policies:
             if self.simulate:
                 return self.env.env_method("simulate_click", (x, y), indices=index)[0]
             else:
-                return (obs[x, y, 0] + 3 * obs[x, y, 2]) * (1 + obs[x, y, 1])
+                return 1 + obs[x, y, 0] * (1 if obs[x, y, 1] > 0 else 0) + obs[x, y, 2]
 
         def __single_prediction(self, obs, action_mask, index, deterministric):
             budget_used = 0
@@ -72,26 +74,22 @@ class Policies:
 
             for x in x_seq:
                 for y in y_seq:
-                    if action_mask[x, y] and budget_used < self.budget:
+                    if action_mask[x, y] and (budget_used < self.budget or len(potentially_valid_moves) == 0):
+                        if budget_used >= self.budget:  # go over budget if no good solution is found yet
+                            logging.warning(
+                                f"{self.__class__.__name__}: estimation budget exceeded ({budget_used}/{self.budget})")
                         score = self.__score(obs, x, y, index)
                         budget_used += 1
                         if score > 0:
                             potentially_valid_moves.append({'move': (x, y), 'score': score * score})
 
-            potentially_valid_moves.sort(key=lambda a: a['score'], reverse=True)
             if len(potentially_valid_moves) > 0:
                 if deterministric:
                     return potentially_valid_moves[0]['move']
                 else:
-                    total_score = sum([a['score'] for a in potentially_valid_moves])
-                    r = random.random() * total_score
-                    rolling_sum = 0
-                    index = -1
-                    while rolling_sum <= r and index < len(potentially_valid_moves) - 1:
-                        index += 1
-                        rolling_sum += potentially_valid_moves[index]['score']
-
-                    return potentially_valid_moves[index]['move']
+                    total_score = sum([c['score'] for c in potentially_valid_moves])
+                    probability = [c['score'] / total_score for c in potentially_valid_moves]
+                    return choice(potentially_valid_moves, p=probability)['move']
             else:
                 return random.randint(0, width - 1), random.randint(0, height - 1)
 
@@ -102,6 +100,31 @@ class Policies:
 
         def predict(self, *args, **kwargs):
             actions = [ap.sample() for ap in self.env.get_attr("action_space")]
+            return actions, None
+
+    class __MaskedRandomUniformPolicy:
+        def __init__(self, env):
+            self.env = env
+            self.policy_name = "random_uniform"
+
+        def __single_prediction(self, obs, action_mask):
+            width = action_mask.shape[0]
+            height = action_mask.shape[1]
+
+            potentially_valid_moves = []
+            for x in range(width):
+                for y in range(height):
+                    if action_mask[x, y]:
+                        potentially_valid_moves.append((x, y))
+
+            if len(potentially_valid_moves) > 0:
+                return random.sample(potentially_valid_moves, 1)[0]
+            else:
+                return random.randint(0, width - 1), random.randint(0, height - 1)
+
+        def predict(self, obs, state, deterministic):
+            action_masks = self.env.get_attr("action_mask")
+            actions = [self.__single_prediction(o, am) for am, o in zip(action_masks, obs)]
             return actions, None
 
     @staticmethod
@@ -127,6 +150,10 @@ class Policies:
         return Policies.__RandomUniformPolicy(env)
 
     @staticmethod
+    def masked_uniform_random(env):
+        return Policies.__MaskedRandomUniformPolicy(env)
+
+    @staticmethod
     def gaussian_random(env):
         return Policies.__RandomGaussianPolicy(env)
 
@@ -136,4 +163,4 @@ class Policies:
 
     @staticmethod
     def greedy_sim(env):
-        return Policies.__Greedy(env, simulate=True, budget=5)
+        return Policies.__Greedy(env, simulate=True, budget=10)
