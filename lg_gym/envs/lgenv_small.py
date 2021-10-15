@@ -123,10 +123,10 @@ class LGEnvSmall(gym.Env):
                 if action_mask[x, y] > 0:
                     for c in COLOUR_CHANNELS:
                         if board[x, y, c] > 0:
-                            obs[x, y, 0] = (board[x + 1, y, c] if x + 1 < width else 0) + (
-                                board[x - 1, y, c] if x > 0 else 0) + (
-                                               board[x, y + 1, c] if y + 1 < height else 0) + (
-                                               board[x, y - 1, c] if y > 0 else 0) + (board[x, y, c])
+                            obs[x, y, 0] = (board[x + 1, y, c] if x + 1 < width else 0) + \
+                                           (board[x - 1, y, c] if x > 0 else 0) + \
+                                           (board[x, y + 1, c] if y + 1 < height else 0) + \
+                                           (board[x, y - 1, c] if y > 0 else 0)
                             break
                         else:
                             obs[x, y, 0] = 0
@@ -147,7 +147,7 @@ class LGEnvSmall(gym.Env):
                     else:
                         obs[x, y, 1] += board[x, y, COLLECT_GOAL_CHANNEL] / collect_goals_max
 
-            obs[:, :, 0] /= 5  # adjacent of the same colour
+            obs[:, :, 0] /= 4  # adjacent of the same colour
             obs[:, :, 1] /= 4  # goals remaining
             obs[:, :, 2] = (board[:, :, 11] + board[:, :, 12] + board[:, :, 13] + board[:, :, 14])  # power pieces
         return obs
