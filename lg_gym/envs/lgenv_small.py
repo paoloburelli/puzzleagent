@@ -83,8 +83,7 @@ class LGEnvSmall(gym.Env):
 
         self.board = np.array(self.board_info["board"],
                               dtype=np.uint8).reshape((self.width, self.height, self.input_channels), order='F')
-        self.action_mask = np.clip(self.board[:, :, CLICKABLE_CHANNELS], 0, 1) * (
-                1 - np.clip(self.board[:, :, NOT_CLICKABLE_CHANNEL], 0, 1))
+        self.action_mask = self.board[:, :, CLICKABLE_CHANNELS] > 0
 
         self.collect_goals_max = self.board[:, :, COLLECT_GOAL_CHANNEL].max()
 
@@ -103,8 +102,8 @@ class LGEnvSmall(gym.Env):
         self.cumulative_reward = 0
 
     def action_masks(self):
-        return [sum(self.action_mask[x, :]) > 0 for x in range(self.width)] + [sum(self.action_mask[:, y]) > 0 for y in
-                                                                               range(self.height)]
+        return [np.any(self.action_mask[x, :]) for x in range(self.width)] + [np.any(self.action_mask[:, y]) for y in
+                                                                              range(self.height)]
 
     @staticmethod
     def _observation_from_board(width, height, channels, action_mask, board, collect_goals_max):
@@ -159,7 +158,7 @@ class LGEnvSmall(gym.Env):
 
         reward = 0
 
-        if self.action_mask[action[0], action[1]] > 0:
+        if self.action_mask[action[0], action[1]]:
             try:
                 result = self.simulator.session_click(self.game['sessionId'], x, y, dry_run=True)
                 board_info = json.loads(result["multichannelArrayState"])
@@ -190,7 +189,7 @@ class LGEnvSmall(gym.Env):
 
         click_successfull = False
 
-        if self.action_mask[action[0], action[1]] > 0:
+        if self.action_mask[action[0], action[1]]:
             try:
                 result = self.simulator.session_click(self.game['sessionId'], x, y, False)
                 try:
@@ -198,8 +197,7 @@ class LGEnvSmall(gym.Env):
                     self.board = np.array(self.board_info["board"],
                                           dtype=np.uint8).reshape((self.width, self.height, self.input_channels),
                                                                   order='F')
-                    self.action_mask = np.clip(self.board[:, :, CLICKABLE_CHANNELS], 0, 1) * (
-                            1 - np.clip(self.board[:, :, NOT_CLICKABLE_CHANNEL], 0, 1))
+                    self.action_mask = self.board[:, :, CLICKABLE_CHANNELS] > 0
                 except Exception as e:
                     logging.error(f"click:parse: {e}")
 
