@@ -1,8 +1,8 @@
 from gym.envs.registration import register
 
 register(
-    id='lgenv-v0',
-    entry_point='lg_gym.envs:LGEnv',
+    id='lgenv_full-v0',
+    entry_point='lg_gym.envs:LGEnvFull',
 )
 
 register(
