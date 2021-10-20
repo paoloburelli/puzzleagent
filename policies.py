@@ -1,5 +1,6 @@
 import numpy as np
 from stable_baselines3.ppo import PPO
+from models.cnnrl import CnnPPO
 from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 from sb3_contrib.ppo_mask import MaskablePPO
 import random
@@ -105,7 +106,7 @@ class Policies:
     class __MaskedRandomUniformPolicy:
         def __init__(self, env):
             self.env = env
-            self.policy_name = "random_uniform"
+            self.policy_name = "masked_random_uniform"
 
         def __single_prediction(self, obs, action_mask):
             width = action_mask.shape[0]
@@ -134,6 +135,15 @@ class Policies:
         model = PPO.load(model_filename, env,
                          custom_objects={'lr_schedule': base.lr_schedule, 'clip_range': base.clip_range})
         model.policy_name = f"trained_ppo[{train_session}]"
+        return model
+
+    @staticmethod
+    def trained_cnn_ppo(train_session, env):
+        model_filename = f"logs/test/{train_session}/best_model.zip"
+        base = CnnPPO(env)
+        model = CnnPPO.load(model_filename, env,
+                            custom_objects={'lr_schedule': base.lr_schedule, 'clip_range': base.clip_range})
+        model.policy_name = f"trained_cnn_ppo[{train_session}]"
         return model
 
     @staticmethod

@@ -10,7 +10,7 @@ class LGEnvSmall(LGEnv):
         return 4
 
     def processed_observation_space(self):
-        obs = np.zeros((self.board_width, self.board_height, self.channels), dtype=np.float32)
+        obs = np.zeros((self.board_width, self.board_height, self.channels()), dtype=np.float32)
 
         colours = np.zeros((self.board_width, self.board_height), dtype=np.uint8)
 
