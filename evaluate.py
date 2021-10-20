@@ -25,7 +25,7 @@ if __name__ == "__main__":
     episodes = args.episodes
     environment = 'lgenv_small-v0'
     n_envs = args.n_envs
-    extra_moves = 100
+    extra_moves = 300
 
     start_level = args.start_level
     end_level = args.end_level + 1 if args.end_level is not None else start_level + 1
