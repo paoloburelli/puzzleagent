@@ -23,7 +23,7 @@ if __name__ == "__main__":
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
 
     episodes = args.episodes
-    environment = 'lgenv_small-v0'
+    environment = 'lgenv_full-v0'
     n_envs = args.n_envs
     extra_moves = 300
 
