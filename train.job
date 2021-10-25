@@ -25,6 +25,14 @@ if [ -n "$RANDOM_SEED" ]; then
   FLAGS="$FLAGS --seed $RANDOM_SEED"
 fi
 
+if [ -n "$LOAD_MODEL" ]; then
+  FLAGS="$FLAGS --load_model $LOAD_MODEL"
+fi
+
+if [ -n "$RANDOM_ORDER" ]; then
+  FLAGS="$FLAGS --random_order"
+fi
+
 python3 train.py $FLAGS $LEVEL_ID
 
 rm -rf venv/$SLURM_JOBID

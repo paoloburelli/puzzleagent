@@ -1,4 +1,5 @@
 import argparse
+import random
 from datetime import datetime
 
 import gym
@@ -18,25 +19,24 @@ if __name__ == "__main__":
     parser.add_argument('--n_envs', type=int, default=8)
     parser.add_argument('--dockersim', action='store_true')
     parser.add_argument('--subprocsim', action='store_true')
+    parser.add_argument('--random_order', action='store_true')
+    parser.add_argument('--load_model', dest='model_file_name', default=None, type=str)
     parser.add_argument('start_level', type=int)
     parser.add_argument('end_level', type=int, default=None, nargs='?')
-    parser.add_argument('episodes_per_level', type=int, default=None, nargs='?')
-    # parser.add_argument('level_id', default=1, type=int, nargs='?',
-    #                     help="level on which the moves are collected, default is 1")
+    parser.add_argument('episodes_per_level', type=int, default=100, nargs='?')
     args = parser.parse_args()
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
 
     env_n = args.n_envs
-    environment = 'lgenv_small-v0'
+    environment = 'lgenv_full-v0'
 
     if args.end_level is None:
         level_id = args.start_level  # Just one level
     else:
-        if args.episodes_per_level is not None:  # Curriculum in a range
-            level_id = [{'level_id': l, 'episodes': args.episodes_per_level} for l in
-                        range(args.start_level, args.end_level)]
-        else:
-            level_id = (args.start_level, args.end_level)  # Random levels in a range
+        sequence = list(range(args.start_level, args.end_level))
+        if args.random_order:
+            random.shuffle(sequence)
+        level_id = [{'level_id': l, 'episodes': args.episodes_per_level} for l in sequence]
 
 
     def make_env(n):
@@ -60,20 +60,25 @@ if __name__ == "__main__":
 
     eval_env = SubprocVecEnv([make_eval_env(i) for i in range(env_n)])
 
-    model = PPO(policy="MlpPolicy", env=env, verbose=1, tensorboard_log="logs/train/")
+    if args.model_file_name is not None:
+        model = MaskableCnnPPO.load(args.model_file_name, env)
 
-    # model = MaskablePPO(MaskableActorCriticPolicy, env=env, verbose=1, tensorboard_log="logs/train/")
+    else:
+        # model = PPO(policy="MlpPolicy", policy_kwargs={'net_arch': [128, 64]}, env=env, verbose=1,
+        # tensorboard_log = "logs/train/")
 
-    # model = CnnPPO(env=env, verbose=1, tensorboard_log="logs/train/", n_steps=2048)
+        model = MaskablePPO(MaskableActorCriticPolicy, env=env, verbose=1, tensorboard_log="logs/train/")
 
-    # model = MaskableCnnPPO(env=env, verbose=1, tensorboard_log="logs/train/", n_steps=2048)
+        # model = CnnPPO(env=env, verbose=1, tensorboard_log="logs/train/")
 
-    level_name = level_id if type(level_id) is not list else list(range(args.start_level, args.end_level))
+        # model = MaskableCnnPPO(env=env, verbose=1, tensorboard_log="logs/train/", n_steps=2048)
 
-    callback_on_best = StopTrainingOnRewardThreshold(reward_threshold=0.9, verbose=1)
+    level_name = level_id if type(level_id) is not list else f"({args.start_level}-{args.end_level})"
+
+    callback_on_best = StopTrainingOnRewardThreshold(reward_threshold=0.66, verbose=1)
     eval_callback = EvalCallback(eval_env, callback_on_new_best=callback_on_best, verbose=1,
                                  best_model_save_path=f'logs/test/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}_1/',
-                                 log_path='logs/test/', eval_freq=4096 * env_n,
+                                 log_path='logs/test/', eval_freq=2048 * env_n,
                                  deterministic=False, render=False,
                                  n_eval_episodes=(len(level_id) if type(level_id) is list else 10) * env_n)
 
