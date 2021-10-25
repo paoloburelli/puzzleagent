@@ -106,7 +106,13 @@ class LGEnv(gym.Env, ABC):
         self.valid_moves_reward = 0.2 / self.valid_moves_limit
         self.goal_collection_reward = 0.2 / self.collect_goals
         self.completion_reward = 0.4
-        self.invalid_action_penalty = -0.1 / self.valid_moves_limit
+        self.invalid_action_penalty = -2 / (self.clicks_limit - self.valid_moves_limit)
+
+        # Action mask training
+        # self.valid_moves_reward = 1
+        # self.goal_collection_reward = 0
+        # self.completion_reward = 0
+        # self.invalid_action_penalty = -1
 
         self.clicks = 0
         self.valid_moves = 0
