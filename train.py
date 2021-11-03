@@ -4,7 +4,7 @@ from datetime import datetime
 
 import gym
 import lg_gym
-from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnRewardThreshold
+from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnRewardThreshold, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
 from stable_baselines3.ppo import PPO
@@ -67,22 +67,25 @@ if __name__ == "__main__":
         # model = PPO(policy="MlpPolicy", policy_kwargs={'net_arch': [128, 64]}, env=env, verbose=1,
         # tensorboard_log = "logs/train/")
 
-        model = MaskablePPO(MaskableActorCriticPolicy, env=env, verbose=1, tensorboard_log="logs/train/")
+        # model = MaskablePPO(MaskableActorCriticPolicy, env=env, verbose=1, tensorboard_log="logs/train/")
 
         # model = CnnPPO(env=env, verbose=1, tensorboard_log="logs/train/")
 
-        # model = MaskableCnnPPO(env=env, verbose=1, tensorboard_log="logs/train/", n_steps=2048)
+        model = MaskableCnnPPO(env=env, verbose=1, tensorboard_log="logs/train/", n_steps=2048)
 
     level_name = level_id if type(level_id) is not list else f"({args.start_level}-{args.end_level})"
 
     callback_on_best = StopTrainingOnRewardThreshold(reward_threshold=0.66, verbose=1)
     eval_callback = EvalCallback(eval_env, callback_on_new_best=callback_on_best, verbose=1,
                                  best_model_save_path=f'logs/test/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}_1/',
-                                 log_path='logs/test/', eval_freq=2048 * env_n,
+                                 log_path='logs/test/', eval_freq=4096 * env_n,
                                  deterministic=False, render=False,
                                  n_eval_episodes=(len(level_id) if type(level_id) is list else 10) * env_n)
 
-    model.learn(100000000, callback=eval_callback,
+    check_callback = CheckpointCallback(4096 * env_n,
+                                        f"logs/train/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}_1/")
+
+    model.learn(100000000, callback=[check_callback, eval_callback],
                 tb_log_name=f'{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}')
-    model.save(f"models/saved/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}.zip")
+    # model.save(f"models/saved/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}.zip")
     env.close()
