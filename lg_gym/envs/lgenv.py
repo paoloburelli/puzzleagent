@@ -30,7 +30,7 @@ class LGEnv(gym.Env, ABC):
 
     @property
     def action_mask(self):
-        return self.board[:, :, LGEnv.CLICKABLE_CHANNELS] > 0
+        return self._action_mask
 
     @abstractmethod
     def channels(self):
@@ -92,6 +92,8 @@ class LGEnv(gym.Env, ABC):
         self.board_height = self.board_info['boardSize'][1]
         self.input_channels = self.board_info['boardSize'][2]
 
+        self.valid_action_list = [(x, y) for x in range(self.board_width) for y in range(self.board_height)]
+
         self.board = np.array(self.board_info["board"],
                               dtype=np.uint8).reshape((self.board_width, self.board_height, self.input_channels),
                                                       order='F')
@@ -103,10 +105,13 @@ class LGEnv(gym.Env, ABC):
                                             dtype=np.float32)
         self.action_space = spaces.MultiDiscrete([self.board_width, self.board_height])
 
+        self.update_valid_actions(self.game['validActionPositions'])
+
         self.valid_moves_reward = 0.2 / self.valid_moves_limit
         self.goal_collection_reward = 0.2 / self.collect_goals
-        self.completion_reward = 0.4
-        self.invalid_action_penalty = -2 / (self.clicks_limit - self.valid_moves_limit)
+        self.victory_reward = 0.4
+        self.loss_reward = -0.4
+        self.invalid_action_penalty = -1 / self.clicks_limit
 
         # Action mask training
         # self.valid_moves_reward = 1
@@ -123,6 +128,20 @@ class LGEnv(gym.Env, ABC):
         return [np.any(self.action_mask[x, :]) for x in range(self.board_width)] + [np.any(self.action_mask[:, y]) for y
                                                                                     in
                                                                                     range(self.board_height)]
+
+    def update_valid_actions(self, valid_actions_list):
+        try:
+            val = json.loads(valid_actions_list)
+            if len(val) == 0:
+                logging.warning("Empty action mask returned from simulator")
+            self.valid_action_list = [(int(va[0] + (self.board_width // 2)), int(va[1] + (self.board_height // 2))) for
+                                      va in val]
+        except:
+            pass
+
+        self._action_mask = np.zeros([self.board_width, self.board_height], dtype=bool)
+        for va in self.valid_action_list:
+            self._action_mask[va[0], va[1]] = 1
 
     def simulate_click(self, action):
         x = int(action[0] - (self.board_width // 2))
@@ -143,7 +162,7 @@ class LGEnv(gym.Env, ABC):
                     reward += self.invalid_action_penalty
 
                 if board_info['collectGoalRemaining'] < 1:
-                    reward += self.completion_reward + 2 * self.valid_moves_reward * (
+                    reward += self.victory_reward + 2 * self.valid_moves_reward * (
                             self.valid_moves_limit - self.valid_moves)
             except Exception as e:
                 logging.error(f"simulate_click: {e}")
@@ -165,6 +184,7 @@ class LGEnv(gym.Env, ABC):
             try:
                 result = self.simulator.session_click(self.game['sessionId'], x, y, False)
                 try:
+                    self.update_valid_actions(result['validActionPositions'])
                     self.board_info = json.loads(result["multichannelArrayState"])
                     self.board = np.array(self.board_info["board"],
                                           dtype=np.uint8).reshape(
@@ -176,27 +196,32 @@ class LGEnv(gym.Env, ABC):
                 if result['clickSuccessful']:
                     click_successfull = True
                     self.valid_moves += 1
-                    reward += self.valid_moves_reward
 
+                    reward = self.valid_moves_reward
                     if self.goals_collected < self.collect_goals - self.board_info['collectGoalRemaining']:
                         reward += self.goal_collection_reward
 
                     self.goals_collected = self.collect_goals - self.board_info['collectGoalRemaining']
                 else:
-                    reward += self.invalid_action_penalty
+                    reward = self.invalid_action_penalty
 
             except Exception as e:
                 logging.error(f"click: {e}")
 
-            if self.board_info['collectGoalRemaining'] < 1:
-                reward += self.completion_reward + 2 * self.valid_moves_reward * (
+            if self.goals_collected >= self.collect_goals and self.valid_moves:
+                reward = self.victory_reward + 2 * self.valid_moves_reward * (
                         self.valid_moves_limit - self.valid_moves)
+            elif self.clicks >= self.clicks_limit or self.valid_moves > self.valid_moves_limit + self.extra_moves or len(
+                    self.valid_action_list) == 0:
+                reward = self.loss_reward
+
         else:
             reward += self.invalid_action_penalty
 
         done = self.goals_collected >= self.collect_goals or \
                self.clicks >= self.clicks_limit or \
-               self.valid_moves >= self.valid_moves_limit + self.extra_moves
+               self.valid_moves >= self.valid_moves_limit + self.extra_moves or \
+               len(self.valid_action_list) == 0
 
         self.cumulative_reward += reward
         if done and self.log_file:
