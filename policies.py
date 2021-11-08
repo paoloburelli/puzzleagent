@@ -8,7 +8,6 @@ from sb3_contrib.ppo_mask import MaskablePPO
 import random
 from scipy.stats import truncnorm
 from numpy.random import choice
-import logging
 
 
 class Policies:
@@ -17,26 +16,26 @@ class Policies:
         def __init__(self, env):
             self.sample_size = 2000000
 
-            width = env.get_attr("width")[0]
-            height = env.get_attr("height")[0]
+            width = env.get_attr("board_width")[0]
+            height = env.get_attr("board_height")[0]
 
-            X = truncnorm(a=-2, b=2, scale=width // 4).rvs(size=self.sample_size) + width // 2
+            X = truncnorm(a=-2, b=2, scale=width // 4).rvs(size=self.sample_size)
             self.distribution_x = X.round().astype(int).tolist()
 
-            Y = truncnorm(a=-2, b=2, scale=height // 4).rvs(size=self.sample_size) + height // 2
+            Y = truncnorm(a=-2, b=2, scale=height // 4).rvs(size=self.sample_size)
             self.distribution_y = Y.round().astype(int).tolist()
 
             self.env = env
             self.policy_name = "gaussian_random"
 
-        def __action(self):
+        def __action(self, env_index):
             random_index = random.randint(0, self.sample_size - 1)
             x = self.distribution_x[random_index]
             y = self.distribution_y[random_index]
-            return [x, y]
+            return self.env.env_method('click_to_action', x, y, indices=env_index)[0]
 
         def predict(self, *args, **kwargs):
-            actions = [self.__action() for n in range(self.env.num_envs)]
+            actions = [self.__action(n) for n in range(self.env.num_envs)]
             return actions, None
 
     class __Greedy:
@@ -56,29 +55,30 @@ class Policies:
                        zip(valid_actions, obs, range(len(valid_actions)))]
             return actions, None
 
-        def __score(self, obs, x, y, index):
+        def __score(self, obs, action, index):
             if self.simulate:
-                return self.env.env_method("simulate_click", (x, y), indices=index)[0]
+                return self.env.env_method("simulate_click", action, indices=index)[0]
             else:
-                return 0.1 + obs[x, y, 1]*100 + math.ceil(obs[x, y, 2])
+                x, y = self.env.env_method('action_to_board_index', action, indices=index)[0]
+                return 0.1 + obs[x, y, 1] * 100 + math.ceil(obs[x, y, 2])
 
         def __single_prediction(self, obs, valid_actions_list, index, deterministric):
             val = valid_actions_list
             random.shuffle(val)
             val = val[:min(self.budget, len(val))]
 
-            evaluated_moves = [{'move': a, 'score': pow(self.__score(obs, a[0], a[1], index), 2)} for a in val]
+            evaluated_actions = [{'action': a, 'score': pow(self.__score(obs, a, index), 2)} for a in val]
 
-            if len(evaluated_moves) == 0:
-                return self.env.get_attr('action_space')[0].sample()
+            if len(evaluated_actions) == 0:
+                return self.env.get_attr('action_space')[index].sample()
 
             if deterministric:
-                evaluated_moves.sort(key=lambda m: m['score'])
-                return evaluated_moves[0]['move']
+                evaluated_actions.sort(key=lambda m: m['score'])
+                return evaluated_actions[0]['action']
             else:
-                total_score = sum([c['score'] for c in evaluated_moves])
-                probability = [c['score'] / total_score for c in evaluated_moves]
-                return choice(evaluated_moves, p=probability)['move']
+                total_score = sum([c['score'] for c in evaluated_actions])
+                probability = [c['score'] / total_score for c in evaluated_actions]
+                return choice(evaluated_actions, p=probability)['action']
 
     class __RandomUniformPolicy:
         def __init__(self, env):

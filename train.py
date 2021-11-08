@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     level_name = level_id if type(level_id) is not list else f"({args.start_level}-{args.end_level})"
 
-    callback_on_best = StopTrainingOnRewardThreshold(reward_threshold=0.66, verbose=1)
+    callback_on_best = StopTrainingOnRewardThreshold(reward_threshold=1, verbose=1)
     eval_callback = EvalCallback(eval_env, callback_on_new_best=callback_on_best, verbose=1,
                                  best_model_save_path=f'logs/test/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}_1/',
                                  log_path='logs/test/', eval_freq=4096 * env_n,
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     check_callback = CheckpointCallback(4096 * env_n,
                                         f"logs/train/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}_1/")
 
-    model.learn(100000000, callback=[check_callback, eval_callback],
+    model.learn(2000000, callback=[check_callback, eval_callback],
                 tb_log_name=f'{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}')
     # model.save(f"models/saved/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}.zip")
     env.close()

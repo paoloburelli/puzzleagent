@@ -24,6 +24,9 @@ class LGEnv(gym.Env, ABC):
     BASIC_PIECE_CHANNEL = 10
     HITTABLE_BY_NEIGHBOUR = 21
 
+    AS_DISCRETE = "discrete"
+    AS_MULTI_DISCRETE = "multi_discrete"
+
     @property
     def level_seed(self):
         return np.random.randint(100000) if self._level_seed is None else self._level_seed
@@ -40,7 +43,9 @@ class LGEnv(gym.Env, ABC):
     def processed_observation_space(self):
         return NotImplemented
 
-    def __init__(self, level_id, host="localhost", port=8080, seed=None, log_file=None, extra_moves=0,
+    def __init__(self, level_id, host="localhost", port=8080, seed=None, log_file=None,
+                 action_space_type="discrete",
+                 extra_moves=0,
                  dockersim=False, subprocsim=False, train=True):
         super().__init__()
 
@@ -50,6 +55,11 @@ class LGEnv(gym.Env, ABC):
         self.log_file = log_file
         self._level_seed = seed
         self.extra_moves = extra_moves
+        self.action_space_type = action_space_type
+
+        if self.action_space_type not in ["discrete", "multi_discrete"]:
+            raise Exception(
+                f"Invalid action space type {self.action_space_type}. It can be either {LGEnv.AS_DISCRETE} or {LGEnv.AS_MULTI_DISCRETE}")
 
         self.simulator = Simulator(host, port)
         self._level_id_config = level_id
@@ -103,14 +113,18 @@ class LGEnv(gym.Env, ABC):
         self.observation_space = spaces.Box(low=0.0, high=1.0,
                                             shape=(self.board_width, self.board_height, self.channels()),
                                             dtype=np.float32)
-        self.action_space = spaces.MultiDiscrete([self.board_width, self.board_height])
+
+        if self.action_space_type == LGEnv.AS_MULTI_DISCRETE:
+            self.action_space = spaces.MultiDiscrete([self.board_width, self.board_height])
+        elif self.action_space_type == LGEnv.AS_DISCRETE:
+            self.action_space = spaces.Discrete(self.board_width * self.board_height)
 
         self.update_valid_actions(self.game['validActionPositions'])
 
-        self.valid_moves_reward = 0.2 / self.valid_moves_limit
+        self.valid_moves_reward = 0  # 0.2 / self.valid_moves_limit
         self.goal_collection_reward = 0.2 / self.collect_goals
-        self.victory_reward = 0.4
-        self.loss_reward = -0.4
+        self.victory_reward = 0.8
+        self.loss_reward = -0.8
         self.invalid_action_penalty = -1 / self.clicks_limit
 
         # Action mask training
@@ -125,31 +139,63 @@ class LGEnv(gym.Env, ABC):
         self.cumulative_reward = 0
 
     def action_masks(self):
-        return [np.any(self.action_mask[x, :]) for x in range(self.board_width)] + [np.any(self.action_mask[:, y]) for y
-                                                                                    in
-                                                                                    range(self.board_height)]
+        if self.action_space_type == LGEnv.AS_MULTI_DISCRETE:
+            return [np.any(self.action_mask[x, :]) for x in range(self.board_width)] + [np.any(self.action_mask[:, y])
+                                                                                        for y in
+                                                                                        range(self.board_height)]
+        elif self.action_space_type == LGEnv.AS_DISCRETE:
+            return self.action_mask
 
     def update_valid_actions(self, valid_actions_list):
         try:
             val = json.loads(valid_actions_list)
             if len(val) == 0:
                 logging.warning("Empty action mask returned from simulator")
-            self.valid_action_list = [(int(va[0] + (self.board_width // 2)), int(va[1] + (self.board_height // 2))) for
+            self.valid_action_list = [self.click_to_action(va[0], va[1]) for
                                       va in val]
         except:
             pass
 
-        self._action_mask = np.zeros([self.board_width, self.board_height], dtype=bool)
-        for va in self.valid_action_list:
-            self._action_mask[va[0], va[1]] = 1
+        if self.action_space_type == LGEnv.AS_MULTI_DISCRETE:
+            self._action_mask = np.zeros([self.board_width, self.board_height], dtype=bool)
+            for va in self.valid_action_list:
+                self._action_mask[va[0], va[1]] = 1
+        elif self.action_space_type == LGEnv.AS_DISCRETE:
+            self._action_mask = np.zeros(self.board_width * self.board_height, dtype=bool)
+            for va in self.valid_action_list:
+                self._action_mask[va] = 1
+
+    def click_to_action(self, x, y):
+        new_x = int(x + (self.board_width // 2))
+        new_y = int(y + (self.board_height // 2))
+
+        if self.action_space_type == LGEnv.AS_DISCRETE:
+            return int(new_x + new_y * self.board_width)
+        elif self.action_space_type == LGEnv.AS_MULTI_DISCRETE:
+            return new_x, new_y
+
+    def action_to_board_index(self, action):
+        if self.action_space_type == LGEnv.AS_MULTI_DISCRETE:
+            return action[0], action[1]
+        elif self.action_space_type == LGEnv.AS_DISCRETE:
+            return int(action % self.board_width), int(action // self.board_width)
+
+    def action_to_click(self, action):
+        x, y = self.action_to_board_index(action)
+        return int(x - (self.board_width // 2)), int(y - (self.board_height // 2))
+
+    def is_valid_action(self, action):
+        if self.action_space_type == LGEnv.AS_MULTI_DISCRETE:
+            return self.action_mask[action[0], action[1]]
+        elif self.action_space_type == LGEnv.AS_DISCRETE:
+            return self.action_mask[action]
 
     def simulate_click(self, action):
-        x = int(action[0] - (self.board_width // 2))
-        y = int(action[1] - (self.board_height // 2))
+        x, y = self.action_to_click(action)
 
         reward = 0
 
-        if self.action_mask[action[0], action[1]]:
+        if self.is_valid_action(action):
             try:
                 result = self.simulator.session_click(self.game['sessionId'], x, y, dry_run=True)
                 board_info = json.loads(result["multichannelArrayState"])
@@ -172,15 +218,14 @@ class LGEnv(gym.Env, ABC):
         return reward
 
     def step(self, action):
-        x = int(action[0] - (self.board_width // 2))
-        y = int(action[1] - (self.board_height // 2))
+        x, y = self.action_to_click(action)
         reward = 0
 
         self.clicks += 1
 
         click_successfull = False
 
-        if self.action_mask[action[0], action[1]]:
+        if self.is_valid_action(action):
             try:
                 result = self.simulator.session_click(self.game['sessionId'], x, y, False)
                 try:
@@ -208,9 +253,8 @@ class LGEnv(gym.Env, ABC):
             except Exception as e:
                 logging.error(f"click: {e}")
 
-            if self.goals_collected >= self.collect_goals and self.valid_moves:
-                reward = self.victory_reward + 2 * self.valid_moves_reward * (
-                        self.valid_moves_limit - self.valid_moves)
+            if self.goals_collected >= self.collect_goals:  # and self.valid_moves <= self.valid_moves_limit:
+                reward = max(0.1, self.victory_reward + 0.05 * (self.valid_moves_limit - self.valid_moves))
             elif self.clicks >= self.clicks_limit or self.valid_moves > self.valid_moves_limit + self.extra_moves or len(
                     self.valid_action_list) == 0:
                 reward = self.loss_reward

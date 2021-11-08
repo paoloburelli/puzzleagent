@@ -22,7 +22,7 @@ class LGEnvSmall(LGEnv):
 
         for x in range(self.board_width):
             for y in range(self.board_height):
-                if self.action_mask[x, y] > 0:
+                if self.board[x, y, LGEnv.CLICKABLE_CHANNELS] > 0:
                     for c in LGEnv.COLOUR_CHANNELS:
                         if self.board[x, y, c] > 0:
                             obs[x, y, 0] = (self.board[x + 1, y, c] if x + 1 < self.board_width else 0) + \
