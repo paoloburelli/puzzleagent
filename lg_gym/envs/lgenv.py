@@ -205,7 +205,7 @@ class LGEnv(gym.Env, ABC):
 
                     new_total_goals_collected = self.level_collect_goals - simulated_board_info['collectGoalRemaining']
 
-                    goals_collected_now = max(0, self.total_goals_collected - new_total_goals_collected)
+                    goals_collected_now = max(0, new_total_goals_collected - self.total_goals_collected)
 
                     reward += self.goal_collection_reward * goals_collected_now
 
@@ -258,7 +258,7 @@ class LGEnv(gym.Env, ABC):
 
                     new_total_goals_collected = self.level_collect_goals - self.board_info['collectGoalRemaining']
 
-                    goals_collected_now = max(0, self.total_goals_collected - new_total_goals_collected)
+                    goals_collected_now = max(0, new_total_goals_collected - self.total_goals_collected)
 
                     reward += self.goal_collection_reward * goals_collected_now
 
