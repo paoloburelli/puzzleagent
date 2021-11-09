@@ -96,7 +96,7 @@ class LGEnv(gym.Env, ABC):
 
         self.clicks_limit = self.game['levelMoveLimit'] * LGEnv.CLICKS_MULTIPLIER
         self.valid_moves_limit = self.game['levelMoveLimit']
-        self.collect_goals = self.board_info['collectGoalRemaining']
+        self.level_collect_goals = self.board_info['collectGoalRemaining']
 
         self.board_width = self.board_info['boardSize'][0]
         self.board_height = self.board_info['boardSize'][1]
@@ -121,8 +121,8 @@ class LGEnv(gym.Env, ABC):
 
         self.update_valid_actions(self.game['validActionPositions'])
 
-        self.valid_moves_reward = 0  # 0.2 / self.valid_moves_limit
-        self.goal_collection_reward = 0.2 / self.collect_goals
+        self.valid_moves_reward = 0
+        self.goal_collection_reward = 0.2 / self.level_collect_goals
         self.victory_reward = 0.8
         self.loss_reward = -0.8
         self.invalid_action_penalty = -1 / self.clicks_limit
@@ -133,9 +133,9 @@ class LGEnv(gym.Env, ABC):
         # self.completion_reward = 0
         # self.invalid_action_penalty = -1
 
-        self.clicks = 0
-        self.valid_moves = 0
-        self.goals_collected = 0
+        self.total_clicks_performed = 0
+        self.total_valid_moves_used = 0
+        self.total_goals_collected = 0
         self.cumulative_reward = 0
 
     def action_masks(self):
@@ -198,22 +198,33 @@ class LGEnv(gym.Env, ABC):
         if self.is_valid_action(action):
             try:
                 result = self.simulator.session_click(self.game['sessionId'], x, y, dry_run=True)
-                board_info = json.loads(result["multichannelArrayState"])
+                simulated_board_info = json.loads(result["multichannelArrayState"])
                 if result['clickSuccessful']:
-                    reward += self.valid_moves_reward
 
-                    if self.goals_collected < self.collect_goals - board_info['collectGoalRemaining']:
-                        reward += self.goal_collection_reward
+                    reward = self.valid_moves_reward
+
+                    new_total_goals_collected = self.level_collect_goals - simulated_board_info['collectGoalRemaining']
+
+                    goals_collected_now = max(0, self.total_goals_collected - new_total_goals_collected)
+
+                    reward += self.goal_collection_reward * goals_collected_now
+
                 else:
-                    reward += self.invalid_action_penalty
+                    reward = self.invalid_action_penalty
 
-                if board_info['collectGoalRemaining'] < 1:
-                    reward += self.victory_reward + 2 * self.valid_moves_reward * (
-                            self.valid_moves_limit - self.valid_moves)
+                if simulated_board_info['collectGoalRemaining'] == 0:
+                    reward = max(0.1,
+                                 self.victory_reward + 0.05 * (
+                                         self.valid_moves_limit - (self.total_valid_moves_used + 1)))
+                elif (self.total_clicks_performed + 1) >= self.clicks_limit or (
+                        self.total_valid_moves_used + 1) > self.valid_moves_limit + self.extra_moves or len(
+                    self.valid_action_list) == 0:
+                    reward = self.loss_reward
+
             except Exception as e:
                 logging.error(f"simulate_click: {e}")
         else:
-            reward += self.invalid_action_penalty
+            reward = self.invalid_action_penalty
 
         return reward
 
@@ -221,9 +232,10 @@ class LGEnv(gym.Env, ABC):
         x, y = self.action_to_click(action)
         reward = 0
 
-        self.clicks += 1
+        self.total_clicks_performed += 1
 
         click_successfull = False
+        goals_collected_now = 0
 
         if self.is_valid_action(action):
             try:
@@ -240,44 +252,48 @@ class LGEnv(gym.Env, ABC):
 
                 if result['clickSuccessful']:
                     click_successfull = True
-                    self.valid_moves += 1
+                    self.total_valid_moves_used += 1
 
                     reward = self.valid_moves_reward
-                    if self.goals_collected < self.collect_goals - self.board_info['collectGoalRemaining']:
-                        reward += self.goal_collection_reward
 
-                    self.goals_collected = self.collect_goals - self.board_info['collectGoalRemaining']
+                    new_total_goals_collected = self.level_collect_goals - self.board_info['collectGoalRemaining']
+
+                    goals_collected_now = max(0, self.total_goals_collected - new_total_goals_collected)
+
+                    reward += self.goal_collection_reward * goals_collected_now
+
+                    self.total_goals_collected = new_total_goals_collected
                 else:
                     reward = self.invalid_action_penalty
 
             except Exception as e:
                 logging.error(f"click: {e}")
 
-            if self.goals_collected >= self.collect_goals:  # and self.valid_moves <= self.valid_moves_limit:
-                reward = max(0.1, self.victory_reward + 0.05 * (self.valid_moves_limit - self.valid_moves))
-            elif self.clicks >= self.clicks_limit or self.valid_moves > self.valid_moves_limit + self.extra_moves or len(
+            if self.total_goals_collected >= self.level_collect_goals:
+                reward = max(0.1, self.victory_reward + 0.05 * (self.valid_moves_limit - self.total_valid_moves_used))
+            elif self.total_clicks_performed >= self.clicks_limit or self.total_valid_moves_used > self.valid_moves_limit + self.extra_moves or len(
                     self.valid_action_list) == 0:
                 reward = self.loss_reward
 
         else:
-            reward += self.invalid_action_penalty
+            reward = self.invalid_action_penalty
 
-        done = self.goals_collected >= self.collect_goals or \
-               self.clicks >= self.clicks_limit or \
-               self.valid_moves >= self.valid_moves_limit + self.extra_moves or \
+        done = self.total_goals_collected >= self.level_collect_goals or \
+               self.total_clicks_performed >= self.clicks_limit or \
+               self.total_valid_moves_used >= self.valid_moves_limit + self.extra_moves or \
                len(self.valid_action_list) == 0
 
         self.cumulative_reward += reward
         if done and self.log_file:
             with open(self.log_file, 'a+') as f:
                 f.write(
-                    f"""{datetime.now().strftime('%Y%m%d%H%M%S')},{self.level_seed},{self.spec.id},{self.current_level_id},{self.valid_moves_limit},{self.clicks_limit},{self.collect_goals},{self.valid_moves},{self.clicks},{self.goals_collected},{self.cumulative_reward}\n""")
+                    f"""{datetime.now().strftime('%Y%m%d%H%M%S')},{self.level_seed},{self.spec.id},{self.current_level_id},{self.valid_moves_limit},{self.clicks_limit},{self.level_collect_goals},{self.total_valid_moves_used},{self.total_clicks_performed},{self.total_goals_collected},{self.cumulative_reward}\n""")
                 f.close()
 
-        return self.processed_observation_space(), reward, done, {'x': x, 'y': y, 'click_successful': click_successfull,
-                                                                  'completed': self.board_info[
-                                                                                   'collectGoalRemaining'] < 1,
-                                                                  'failed': self.clicks_limit < 1 or self.valid_moves_limit < 1}
+        return self.processed_observation_space(), reward, done, {'x': x, 'y': y,
+                                                                  'is_success': self.total_goals_collected >= self.level_collect_goals,
+                                                                  'valid_action': click_successfull,
+                                                                  'goals_collected': goals_collected_now}
 
     def reset(self):
         try:

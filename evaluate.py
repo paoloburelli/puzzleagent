@@ -1,9 +1,10 @@
 import gym
 import lg_gym
 from policies import Policies
-from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.env_util import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv
+from sb3_contrib.common.maskable.evaluation import evaluate_policy
+from sb3_contrib.ppo_mask.ppo_mask import MaskablePPO
 from datetime import datetime
 import argparse
 
@@ -48,6 +49,7 @@ if __name__ == "__main__":
             policy = getattr(Policies, args.policy)(env)
 
         print(f"Testing {policy.policy_name} on level {level_id} with seed {args.seed}")
-        mean_reward, std_reward = evaluate_policy(policy, env, n_eval_episodes=episodes, deterministic=False)
+        mean_reward, std_reward = evaluate_policy(policy, env, n_eval_episodes=episodes, deterministic=False,
+                                                  use_masking=isinstance(policy, MaskablePPO))
         print(f"mean_reward={mean_reward:.2f} +/- {std_reward}")
         env.close()

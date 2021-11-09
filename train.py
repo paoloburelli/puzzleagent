@@ -4,13 +4,12 @@ from datetime import datetime
 
 import gym
 import lg_gym
-from stable_baselines3.common.callbacks import EvalCallback, StopTrainingOnRewardThreshold, CheckpointCallback
+from stable_baselines3.common.callbacks import StopTrainingOnRewardThreshold, CheckpointCallback, BaseCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import SubprocVecEnv, DummyVecEnv
-from stable_baselines3.ppo import PPO
-from models.cnnrl import CnnPPO, MaskableCnnPPO
-from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
-from sb3_contrib.ppo_mask import MaskablePPO
+from stable_baselines3.common.utils import safe_mean
+from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
+from models.cnnrl import MaskableCnnPPO
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train an agent in a level')
@@ -62,30 +61,21 @@ if __name__ == "__main__":
 
     if args.model_file_name is not None:
         model = MaskableCnnPPO.load(args.model_file_name, env)
-
     else:
-        # model = PPO(policy="MlpPolicy", policy_kwargs={'net_arch': [128, 64]}, env=env, verbose=1,
-        # tensorboard_log = "logs/train/")
-
-        # model = MaskablePPO(MaskableActorCriticPolicy, env=env, verbose=1, tensorboard_log="logs/train/")
-
-        # model = CnnPPO(env=env, verbose=1, tensorboard_log="logs/train/")
-
         model = MaskableCnnPPO(env=env, verbose=1, tensorboard_log="logs/train/", n_steps=2048)
 
     level_name = level_id if type(level_id) is not list else f"({args.start_level}-{args.end_level})"
 
     callback_on_best = StopTrainingOnRewardThreshold(reward_threshold=1, verbose=1)
-    eval_callback = EvalCallback(eval_env, callback_on_new_best=callback_on_best, verbose=1,
-                                 best_model_save_path=f'logs/test/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}_1/',
-                                 log_path='logs/test/', eval_freq=4096 * env_n,
-                                 deterministic=False, render=False,
-                                 n_eval_episodes=(len(level_id) if type(level_id) is list else 10) * env_n)
+    eval_callback = MaskableEvalCallback(eval_env, callback_on_new_best=callback_on_best, verbose=1,
+                                         best_model_save_path=f'logs/test/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}_1/',
+                                         log_path='logs/test/', eval_freq=4096,
+                                         deterministic=False, render=False,
+                                         n_eval_episodes=(len(level_id) if type(level_id) is list else 10) * env_n)
 
-    check_callback = CheckpointCallback(4096 * env_n,
+    check_callback = CheckpointCallback(4096,
                                         f"logs/train/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}_1/")
 
-    model.learn(2000000, callback=[check_callback, eval_callback],
+    model.learn(100000000, callback=[check_callback, eval_callback],
                 tb_log_name=f'{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}')
-    # model.save(f"models/saved/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}.zip")
     env.close()
