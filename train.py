@@ -71,7 +71,8 @@ if __name__ == "__main__":
                                          best_model_save_path=f'logs/test/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}_1/',
                                          log_path='logs/test/', eval_freq=4096,
                                          deterministic=False, render=False,
-                                         n_eval_episodes=(len(level_id) if type(level_id) is list else 10) * env_n)
+                                         n_eval_episodes=10 * (
+                                             len(level_id) if type(level_id) is list else 10) // env_n)
 
     check_callback = CheckpointCallback(4096,
                                         f"logs/train/{model.__class__.__name__}_{level_name}_{args.job_id}_{timestamp}_1/")
