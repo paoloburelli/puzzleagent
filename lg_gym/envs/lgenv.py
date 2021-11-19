@@ -269,16 +269,21 @@ class LGEnv(gym.Env, ABC):
             except Exception as e:
                 logging.error(f"click: {e}")
 
-            if self.total_goals_collected >= self.level_collect_goals:
-                reward = max(0.1, self.victory_reward + 0.05 * (self.valid_moves_limit - self.total_valid_moves_used))
-            elif self.total_clicks_performed >= self.clicks_limit or self.total_valid_moves_used > self.valid_moves_limit + self.extra_moves or len(
+            if self.board_info['collectGoalRemaining'] <= 0:
+                extra_moves_used = self.total_valid_moves_used - self.valid_moves_limit
+                extra_moves_penalty = -0.5 * (
+                    extra_moves_used * self.victory_reward / self.valid_moves_limit if extra_moves_used <= 0 else extra_moves_used * self.victory_reward / (
+                            self.valid_moves_limit + self.extra_moves))
+
+                reward = max(0.1, self.victory_reward + extra_moves_penalty)
+            elif self.total_clicks_performed >= self.clicks_limit or self.total_valid_moves_used >= self.valid_moves_limit + self.extra_moves or len(
                     self.valid_action_list) == 0:
                 reward = self.loss_reward
 
         else:
             reward = self.invalid_action_penalty
 
-        done = self.total_goals_collected >= self.level_collect_goals or \
+        done = self.board_info['collectGoalRemaining'] <= 0 or \
                self.total_clicks_performed >= self.clicks_limit or \
                self.total_valid_moves_used >= self.valid_moves_limit + self.extra_moves or \
                len(self.valid_action_list) == 0
@@ -291,7 +296,8 @@ class LGEnv(gym.Env, ABC):
                 f.close()
 
         return self.processed_observation_space(), reward, done, {'x': x, 'y': y,
-                                                                  'is_success': self.total_goals_collected >= self.level_collect_goals,
+                                                                  'is_success': self.board_info[
+                                                                                    'collectGoalRemaining'] <= 0,
                                                                   'valid_action': click_successfull,
                                                                   'goals_collected': goals_collected_now}
 
