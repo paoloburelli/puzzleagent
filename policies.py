@@ -118,12 +118,11 @@ class Policies:
         return model
 
     @staticmethod
-    def trained_maskable_ppo(train_session, env):
-        model_filename = f"logs/test/{train_session}/best_model.zip"
+    def trained_maskable_ppo(model_filename, env):
         base = MaskablePPO(MaskableActorCriticPolicy, env)
         model = MaskablePPO.load(model_filename, env,
                                  custom_objects={'lr_schedule': base.lr_schedule, 'clip_range': base.clip_range})
-        model.policy_name = f"trained_maskable_ppo[{train_session}]"
+        model.policy_name = f"trained_maskable_ppo"
         return model
 
     @staticmethod
