@@ -122,16 +122,10 @@ class LGEnv(gym.Env, ABC):
         self.update_valid_actions(self.game['validActionPositions'])
 
         self.valid_moves_reward = 0
-        self.goal_collection_reward = 0.2 / self.level_collect_goals
-        self.victory_reward = 0.8
-        self.loss_reward = -0.8
+        self.goal_collection_reward = 0.4 / self.level_collect_goals
+        self.victory_reward = 0.6
+        self.loss_reward = -0.6
         self.invalid_action_penalty = -1 / self.clicks_limit
-
-        # Action mask training
-        # self.valid_moves_reward = 1
-        # self.goal_collection_reward = 0
-        # self.completion_reward = 0
-        # self.invalid_action_penalty = -1
 
         self.total_clicks_performed = 0
         self.total_valid_moves_used = 0
@@ -165,14 +159,14 @@ class LGEnv(gym.Env, ABC):
             for va in self.valid_action_list:
                 self._action_mask[va] = 1
 
-    def click_to_action(self, x, y):
-        new_x = int(x + (self.board_width // 2))
-        new_y = int(y + (self.board_height // 2))
-
+    def board_index_to_action(self, x, y):
         if self.action_space_type == LGEnv.AS_DISCRETE:
-            return int(new_x + new_y * self.board_width)
+            return int(x + y * self.board_width)
         elif self.action_space_type == LGEnv.AS_MULTI_DISCRETE:
-            return new_x, new_y
+            return x, y
+
+    def click_to_action(self, x, y):
+        return self.board_index_to_action(int(x + (self.board_width // 2)), int(y + (self.board_height // 2)))
 
     def action_to_board_index(self, action):
         if self.action_space_type == LGEnv.AS_MULTI_DISCRETE:
@@ -217,8 +211,7 @@ class LGEnv(gym.Env, ABC):
                                  self.victory_reward + 0.05 * (
                                          self.valid_moves_limit - (self.total_valid_moves_used + 1)))
                 elif (self.total_clicks_performed + 1) >= self.clicks_limit or (
-                        self.total_valid_moves_used + 1) > self.valid_moves_limit + self.extra_moves or len(
-                    self.valid_action_list) == 0:
+                        self.total_valid_moves_used + 1) > self.valid_moves_limit + self.extra_moves:
                     reward = self.loss_reward
 
             except Exception as e:
@@ -276,8 +269,7 @@ class LGEnv(gym.Env, ABC):
                             self.valid_moves_limit + self.extra_moves))
 
                 reward = max(0.1, self.victory_reward + extra_moves_penalty)
-            elif self.total_clicks_performed >= self.clicks_limit or self.total_valid_moves_used >= self.valid_moves_limit + self.extra_moves or len(
-                    self.valid_action_list) == 0:
+            elif self.total_clicks_performed >= self.clicks_limit or self.total_valid_moves_used >= self.valid_moves_limit + self.extra_moves:
                 reward = self.loss_reward
 
         else:
