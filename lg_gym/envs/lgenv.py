@@ -211,7 +211,8 @@ class LGEnv(gym.Env, ABC):
                                  self.victory_reward + 0.05 * (
                                          self.valid_moves_limit - (self.total_valid_moves_used + 1)))
                 elif (self.total_clicks_performed + 1) >= self.clicks_limit or (
-                        self.total_valid_moves_used + 1) > self.valid_moves_limit + self.extra_moves:
+                        self.total_valid_moves_used + 1) > self.valid_moves_limit + self.extra_moves or len(
+                    self.valid_action_list) == 0:
                     reward = self.loss_reward
 
             except Exception as e:
@@ -269,7 +270,8 @@ class LGEnv(gym.Env, ABC):
                             self.valid_moves_limit + self.extra_moves))
 
                 reward = max(0.1, self.victory_reward + extra_moves_penalty)
-            elif self.total_clicks_performed >= self.clicks_limit or self.total_valid_moves_used >= self.valid_moves_limit + self.extra_moves:
+            elif self.total_clicks_performed >= self.clicks_limit or self.total_valid_moves_used >= self.valid_moves_limit + self.extra_moves or len(
+                    self.valid_action_list) == 0:
                 reward = self.loss_reward
 
         else:
