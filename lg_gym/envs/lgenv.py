@@ -123,7 +123,7 @@ class LGEnv(gym.Env, ABC):
 
         self.valid_moves_reward = 0
         self.goal_collection_reward = 0.4 / self.level_collect_goals
-        self.victory_reward = 0.6
+        self.completion_reward = 0.6
         self.loss_reward = -0.6
         self.invalid_action_penalty = -1 / self.clicks_limit
 
@@ -208,7 +208,7 @@ class LGEnv(gym.Env, ABC):
 
                 if simulated_board_info['collectGoalRemaining'] == 0:
                     reward = max(0.1,
-                                 self.victory_reward + 0.05 * (
+                                 self.completion_reward + 0.05 * (
                                          self.valid_moves_limit - (self.total_valid_moves_used + 1)))
                 elif (self.total_clicks_performed + 1) >= self.clicks_limit or (
                         self.total_valid_moves_used + 1) > self.valid_moves_limit + self.extra_moves or len(
@@ -265,11 +265,11 @@ class LGEnv(gym.Env, ABC):
 
             if self.board_info['collectGoalRemaining'] <= 0:
                 extra_moves_used = self.total_valid_moves_used - self.valid_moves_limit
-                extra_moves_penalty = -0.5 * (
-                    extra_moves_used * self.victory_reward / self.valid_moves_limit if extra_moves_used <= 0 else extra_moves_used * self.victory_reward / (
+                extra_moves_penalty = -0.2 * (
+                    extra_moves_used * self.completion_reward / self.valid_moves_limit if extra_moves_used <= 0 else extra_moves_used * self.completion_reward / (
                             self.valid_moves_limit + self.extra_moves))
 
-                reward = max(0.1, self.victory_reward + extra_moves_penalty)
+                reward = max(0.1, self.completion_reward + extra_moves_penalty)
             elif self.total_clicks_performed >= self.clicks_limit or self.total_valid_moves_used >= self.valid_moves_limit + self.extra_moves or len(
                     self.valid_action_list) == 0:
                 reward = self.loss_reward
@@ -289,9 +289,11 @@ class LGEnv(gym.Env, ABC):
                     f"""{datetime.now().strftime('%Y%m%d%H%M%S')},{self.level_seed},{self.spec.id},{self.current_level_id},{self.valid_moves_limit},{self.clicks_limit},{self.level_collect_goals},{self.total_valid_moves_used},{self.total_clicks_performed},{self.total_goals_collected},{self.cumulative_reward}\n""")
                 f.close()
 
+        victory = self.board_info['collectGoalRemaining'] <= 0 and \
+                  self.total_valid_moves_used <= self.valid_moves_limit
+
         return self.processed_observation_space(), reward, done, {'x': x, 'y': y,
-                                                                  'is_success': self.board_info[
-                                                                                    'collectGoalRemaining'] <= 0,
+                                                                  'is_success': victory,
                                                                   'valid_action': click_successfull,
                                                                   'goals_collected': goals_collected_now}
 
