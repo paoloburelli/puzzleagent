@@ -14,7 +14,6 @@ WORKDIR /app
 RUN python -m pip install -r requirements.txt --no-cache-dir
 
 COPY . /app
-RUN chmod +x /app/simulator/linux.x86_64
-RUN chmod +x /app/scripts/*
+RUN chmod -R 777 /app
 CMD ./scripts/start_container.sh
 

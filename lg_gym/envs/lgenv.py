@@ -1,5 +1,3 @@
-import random
-
 import gym
 from gym import spaces
 import numpy as np
@@ -22,6 +20,7 @@ class LGEnv(gym.Env, ABC):
     NOT_CLICKABLE_CHANNEL = 8
     COLLECT_GOAL_CHANNEL = 9
     BASIC_PIECE_CHANNEL = 10
+    BOMB_CHANNEL = 11
     HITTABLE_BY_NEIGHBOUR = 21
 
     AS_DISCRETE = "discrete"
@@ -45,12 +44,8 @@ class LGEnv(gym.Env, ABC):
 
     def __init__(self, level_id, host="localhost", port=8080, seed=None, log_file=None,
                  action_space_type="discrete",
-                 extra_moves=0,
-                 dockersim=False, subprocsim=False, train=True):
+                 extra_moves=0, train=True):
         super().__init__()
-
-        self.simulator_docker = Simulator.start_container(port) if dockersim else None
-        self.simulator_subprocess = Simulator.start_process(port) if subprocsim else None
 
         self.log_file = log_file
         self._level_seed = seed
@@ -62,7 +57,7 @@ class LGEnv(gym.Env, ABC):
                 f"Invalid action space type {self.action_space_type}. It can be either {LGEnv.AS_DISCRETE} or {LGEnv.AS_MULTI_DISCRETE}")
 
         self.simulator = Simulator(host, port)
-        self._level_id_config = level_id
+        self.level_id = level_id
         self.train = train
         logging.basicConfig(format='%(asctime)s:%(levelname)s:%(message)s', level=logging.INFO)
 
@@ -72,26 +67,13 @@ class LGEnv(gym.Env, ABC):
 
         if init:
             self.episode = 0
-            self.curriculum_step_ep = -1
-            self.curriculum_step = 0
         else:
             self.episode += 1
 
-        if type(self._level_id_config) is list:
-            next_step = self.curriculum_step_ep + 1
-            self.curriculum_step_ep = next_step % self._level_id_config[self.curriculum_step]['episodes']
-            self.curriculum_step += next_step // self._level_id_config[self.curriculum_step]['episodes']
-            self.curriculum_step %= len(self._level_id_config)
-
-            self.current_level_id = self._level_id_config[self.curriculum_step]['level_id']
-        else:
-            self.current_level_id = self._level_id_config
-
         logging.info(f"{self.__class__.__name__}[{'train' if self.train else 'eval'}]: "
-                     f"init level {self.current_level_id}, episode {self.episode}, "
-                     f"curriculum step {self.curriculum_step}, curriculum step ep {self.curriculum_step_ep}")
+                     f"init level {self.level_id}, episode {self.episode}")
 
-        self.game = self.simulator.session_create(self.current_level_id, self.level_seed)
+        self.game = self.simulator.session_create(self.level_id, self.level_seed)
         self.board_info = json.loads(self.game["multichannelArrayState"])
 
         self.clicks_limit = self.game['levelMoveLimit'] * LGEnv.CLICKS_MULTIPLIER
@@ -264,12 +246,9 @@ class LGEnv(gym.Env, ABC):
                 logging.error(f"click: {e}")
 
             if self.board_info['collectGoalRemaining'] <= 0:
-                extra_moves_used = self.total_valid_moves_used - self.valid_moves_limit
-                extra_moves_penalty = -0.2 * (
-                    extra_moves_used * self.completion_reward / self.valid_moves_limit if extra_moves_used <= 0 else extra_moves_used * self.completion_reward / (
-                            self.valid_moves_limit + self.extra_moves))
-
-                reward = max(0.1, self.completion_reward + extra_moves_penalty)
+                extra_moves_used = max(0, self.total_valid_moves_used - self.valid_moves_limit)
+                extra_moves_penalty = 0 if self.extra_moves == 0 else extra_moves_used / self.extra_moves
+                reward = self.completion_reward * (1 - extra_moves_penalty / 2)
             elif self.total_clicks_performed >= self.clicks_limit or self.total_valid_moves_used >= self.valid_moves_limit + self.extra_moves or len(
                     self.valid_action_list) == 0:
                 reward = self.loss_reward
@@ -286,7 +265,7 @@ class LGEnv(gym.Env, ABC):
         if done and self.log_file:
             with open(self.log_file, 'a+') as f:
                 f.write(
-                    f"""{datetime.now().strftime('%Y%m%d%H%M%S')},{self.level_seed},{self.spec.id},{self.current_level_id},{self.valid_moves_limit},{self.clicks_limit},{self.level_collect_goals},{self.total_valid_moves_used},{self.total_clicks_performed},{self.total_goals_collected},{self.cumulative_reward}\n""")
+                    f"""{datetime.now().strftime('%Y%m%d%H%M%S')},{self.level_seed},{self.spec.id},{self.level_id},{self.valid_moves_limit},{self.clicks_limit},{self.level_collect_goals},{self.total_valid_moves_used},{self.total_clicks_performed},{self.total_goals_collected},{self.cumulative_reward}\n""")
                 f.close()
 
         victory = self.board_info['collectGoalRemaining'] <= 0 and \
