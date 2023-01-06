@@ -1,5 +1,7 @@
 import gym
-from gym import spaces
+from gym.spaces.discrete import Discrete
+from gym.spaces.box import Box
+from gym.spaces.multi_discrete import MultiDiscrete
 import numpy as np
 import json
 import logging
@@ -92,14 +94,14 @@ class LGEnv(gym.Env, ABC):
 
         self.collect_goals_max = self.board[:, :, LGEnv.COLLECT_GOAL_CHANNEL].max()
 
-        self.observation_space = spaces.Box(low=0.0, high=1.0,
+        self.observation_space = Box(low=0.0, high=1.0,
                                             shape=(self.board_width, self.board_height, self.channels()),
                                             dtype=np.float32)
 
         if self.action_space_type == LGEnv.AS_MULTI_DISCRETE:
-            self.action_space = spaces.MultiDiscrete([self.board_width, self.board_height])
+            self.action_space = MultiDiscrete([self.board_width, self.board_height])
         elif self.action_space_type == LGEnv.AS_DISCRETE:
-            self.action_space = spaces.Discrete(self.board_width * self.board_height)
+            self.action_space = Discrete(self.board_width * self.board_height)
 
         self.update_valid_actions(self.game['validActionPositions'])
 
@@ -291,12 +293,6 @@ class LGEnv(gym.Env, ABC):
             self.simulator.session_destroy(self.game['sessionId'])
         except Exception as e:
             logging.error(f"close: {e}")
-
-        if self.simulator_docker is not None:
-            Simulator.stop_container(self.simulator_docker)
-
-        if self.simulator_subprocess is not None:
-            Simulator.stop_process(self.simulator_subprocess)
 
     def render(self, mode='human', close=False):
         pass

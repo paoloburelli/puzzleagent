@@ -6,6 +6,6 @@ register(
 )
 
 register(
-    id='lgenv_small-v0',
-    entry_point='lg_gym.envs:LGEnvSmall',
+    id='lgenv_flat-v0',
+    entry_point='lg_gym.envs:LGFlat',
 )

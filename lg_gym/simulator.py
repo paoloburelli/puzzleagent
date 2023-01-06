@@ -1,32 +1,8 @@
 import requests
 import json
-from docker import from_env
-import time
-import subprocess
 
 
 class Simulator(object):
-
-    @staticmethod
-    def start_container(port):
-        docker_client = from_env()
-        container = docker_client.containers.run("lg-simulator", detach=True, ports={8080: port})
-        time.sleep(10)
-        return container
-
-    @staticmethod
-    def stop_container(container):
-        container.remove(force=True)
-
-    @staticmethod
-    def start_process(port):
-        proc = subprocess.Popen(["simulator/linux.x86_64", f"-port {port}"])
-        time.sleep(10)
-        return proc
-
-    @staticmethod
-    def stop_process(proc):
-        proc.terminate()
 
     def __init__(self, host: str, port: int, **kwargs):
         self.url = f"http://{host}:{port}"

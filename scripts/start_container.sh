@@ -9,8 +9,9 @@ if [ -n "$SEED" ]; then
   FLAGS="$FLAGS --seed $SEED"
 fi
 
+source venv/bin/activate
 killall tensorboard
-tensorboard --logdir logs --port=80 --bind_all &
+tensorboard --logdir logs --bind_all &
 ./scripts/run_sims.sh $ENVS
 sleep 10
 python3 train.py $FLAGS $LEVEL

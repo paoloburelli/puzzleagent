@@ -2,37 +2,38 @@
 
 #SBATCH --job-name=train_agent        # Job name
 #SBATCH --output=job.%j.out      # Name of output file (%j expands to jobId)
-#SBATCH --cpus-per-task=64       # Schedule one core
+#SBATCH --cpus-per-task=32     # Schedule one core
 #SBATCH --time=72:00:00          # Run time (hh:mm:ss) - run for one hour max
-#SBATCH --partition=red    # Run on either the Red or Brown queue
+#SBATCH --partition=red,brown    # Run on either the Red or Brown queue
 #SBATCH --mail-type=END          # Send an email when the job finishes
 
-module load Python/3.8.2-GCCcore-9.3.0
-virtualenv venv/$SLURM_JOBID
-source venv/$SLURM_JOBID/bin/activate
+module load Python/3.8.6-GCCcore-10.2.0
+virtualenv venv/train
+source venv/train/bin/activate
 pip3 install -r requirements.txt
 
 export PYTHONPATH=.
 export LC_CTYPE=en_US.UTF-8
-export N_ENVS=32
+export N_ENVS=16
 
-./simulator/run_sims.sh $N_ENVS
+./scripts/run_sims.sh $N_ENVS
 sleep 5
 
 FLAGS="--job_id $SLURM_JOBID --n_envs $N_ENVS"
 
-if [ -n "$RANDOM_SEED" ]; then
-  FLAGS="$FLAGS --seed $RANDOM_SEED"
-fi
-
-if [ -n "$LOAD_MODEL" ]; then
-  FLAGS="$FLAGS --load_model $LOAD_MODEL"
-fi
-
-if [ -n "$RANDOM_ORDER" ]; then
-  FLAGS="$FLAGS --random_order"
-fi
-
-python3 train.py $FLAGS $LEVEL_ID
-
-rm -rf venv/$SLURM_JOBID
+#if [ -n "$RANDOM_SEED" ]; then
+#  FLAGS="$FLAGS --seed $RANDOM_SEED"
+#fi
+#
+#if [ -n "$LOAD_MODEL" ]; then
+#  FLAGS="$FLAGS --load_model $LOAD_MODEL"
+#fi
+#
+#if [ -n "$RANDOM_ORDER" ]; then
+#  FLAGS="$FLAGS --random_order"
+#fi
+for ((level_id = $FIRST; level_id <= $LAST; level_id++)); do
+  for ((i = 1; i <= $REPS; i++)); do
+    python3 train.py $FLAGS $level_id
+  done
+done
