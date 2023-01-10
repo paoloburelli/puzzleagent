@@ -10,8 +10,12 @@ if [ -n "$SEED" ]; then
 fi
 
 source venv/bin/activate
-killall tensorboard
 tensorboard --logdir logs --bind_all &
 ./scripts/run_sims.sh $ENVS
 sleep 10
-python3 train.py $FLAGS $LEVEL
+
+for ((level_id = $FIRST; level_id <= $LAST; level_id++)); do
+  for ((i = 1; i <= $REPS; i++)); do
+    python3 train.py $FLAGS $level_id
+  done
+done

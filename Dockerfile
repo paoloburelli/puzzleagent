@@ -11,7 +11,7 @@ RUN mkdir /app/logs/eval
 COPY requirements.txt /app
 WORKDIR /app
 
-RUN python -m pip install -r requirements.txt --no-cache-dir
+RUN python -m pip install -r requirements.txt
 
 COPY . /app
 RUN chmod -R 777 /app
