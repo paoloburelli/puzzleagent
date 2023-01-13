@@ -114,15 +114,20 @@ class LGFlat(gym.Env, ABC):
             val = json.loads(valid_actions_list)
             if len(val) == 0:
                 logging.warning("Empty action mask returned from simulator")
+                self.valid_action_list = []
             else:
                 self.valid_action_list = [self.click_to_action(va[0], va[1]) for
                                           va in val]
         except:
-            pass
+            self.valid_action_list = []
 
         self._action_mask = np.zeros(self.board_width * self.board_height, dtype=bool)
         for va in self.valid_action_list:
             self._action_mask[va] = 1
+
+    @property
+    def is_action_mask_empty(self):
+        return self._action_mask.sum() == 0
 
     def click_to_action(self, x, y):
         b_x = int(x + (self.board_width // 2))
@@ -191,7 +196,7 @@ class LGFlat(gym.Env, ABC):
 
         done = self.board_info['collectGoalRemaining'] <= 0 or \
                self.total_valid_moves_used >= self.moves_limit + self.extra_moves or \
-               len(self.valid_action_list) == 0
+               len(self.valid_action_list) == 0 or self.is_action_mask_empty
 
         self.cumulative_reward += reward
         if done and self.log_file:
